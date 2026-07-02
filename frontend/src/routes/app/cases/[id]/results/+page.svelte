@@ -74,6 +74,45 @@
 	let gapAnalysis = $derived(multiStageResult?.gap_analysis);
 	let hasCriticalGaps = $derived(gapAnalysis && (gapAnalysis.critical_count > 0 || gapAnalysis.high_count > 0));
 	let criticalGapCount = $derived(gapAnalysis ? gapAnalysis.critical_count + gapAnalysis.high_count : 0);
+
+	// Tab bar definition (ARIA tablist). Panels below stay mounted via
+	// class:hidden to preserve in-flight state across switches.
+	let resultTabs = $derived([
+		{ id: 'analysis', label: 'Case Analysis' },
+		...(hasMultiStageSupport
+			? [{ id: 'gaps', label: 'Gaps', badge: hasCriticalGaps ? criticalGapCount : undefined }]
+			: []),
+		...(results?.streaming_analysis ? [{ id: 'fullAnalysis', label: 'Full Analysis' }] : []),
+		{ id: 'documents', label: 'Document Review' },
+		{ id: 'letters', label: 'Findings & Demand' },
+		{ id: 'chat', label: 'Case Chat' },
+		{ id: 'quality', label: 'Quality Report' }
+	] as { id: typeof activeTab; label: string; badge?: number }[]);
+
+	let tabButtons: HTMLButtonElement[] = [];
+
+	function onTabKeydown(event: KeyboardEvent, index: number) {
+		let next: number | null = null;
+		switch (event.key) {
+			case 'ArrowRight':
+				next = (index + 1) % resultTabs.length;
+				break;
+			case 'ArrowLeft':
+				next = (index - 1 + resultTabs.length) % resultTabs.length;
+				break;
+			case 'Home':
+				next = 0;
+				break;
+			case 'End':
+				next = resultTabs.length - 1;
+				break;
+			default:
+				return;
+		}
+		event.preventDefault();
+		activeTab = resultTabs[next].id;
+		tabButtons[next]?.focus();
+	}
 	let analyzingGaps = $state(false);
 	let gapAnalysisProgress = $state('');
 	let streamingGapSummary = $state(''); // Streaming attorney summary
@@ -948,91 +987,36 @@
 
 	{#if results}
 		<div class="border-b border-gray-200 mb-6">
-			<nav class="-mb-px flex flex-wrap gap-4">
-				<button
-					class={`py-4 px-1 border-b-2 text-sm font-medium ${
-						activeTab === 'analysis'
-							? 'border-accent text-accent'
-							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-					}`}
-					onclick={() => (activeTab = 'analysis')}
-				>
-					Case Analysis
-				</button>
-				{#if hasMultiStageSupport}
-				<button
-					class={`py-4 px-1 border-b-2 text-sm font-medium relative ${
-						activeTab === 'gaps'
-							? 'border-accent text-accent'
-							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-					}`}
-					onclick={() => (activeTab = 'gaps')}
-				>
-					Gaps
-					{#if hasCriticalGaps}
-						<span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded">
-							{criticalGapCount}
-						</span>
-					{/if}
-				</button>
-				{/if}
-				{#if results.streaming_analysis}
-				<button
-					class={`py-4 px-1 border-b-2 text-sm font-medium ${
-						activeTab === 'fullAnalysis'
-							? 'border-accent text-accent'
-							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-					}`}
-					onclick={() => (activeTab = 'fullAnalysis')}
-				>
-					Full Analysis
-				</button>
-				{/if}
-				<button
-					class={`py-4 px-1 border-b-2 text-sm font-medium ${
-						activeTab === 'documents'
-							? 'border-accent text-accent'
-							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-					}`}
-					onclick={() => (activeTab = 'documents')}
-				>
-					Document Review
-				</button>
-				<button
-					class={`py-4 px-1 border-b-2 text-sm font-medium ${
-						activeTab === 'letters'
-							? 'border-accent text-accent'
-							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-					}`}
-					onclick={() => (activeTab = 'letters')}
-				>
-					Findings & Demand
-				</button>
-				<button
-					class={`py-4 px-1 border-b-2 text-sm font-medium ${
-						activeTab === 'chat'
-							? 'border-accent text-accent'
-							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-					}`}
-					onclick={() => (activeTab = 'chat')}
-				>
-					Case Chat
-				</button>
-				<button
-					class={`py-4 px-1 border-b-2 text-sm font-medium ${
-						activeTab === 'quality'
-							? 'border-accent text-accent'
-							: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-					}`}
-					onclick={() => (activeTab = 'quality')}
-				>
-					Quality Report
-				</button>
-			</nav>
+			<div class="-mb-px flex flex-wrap gap-4" role="tablist" aria-label="Analysis results sections">
+				{#each resultTabs as tab, i (tab.id)}
+					<button
+						bind:this={tabButtons[i]}
+						role="tab"
+						id="results-tab-{tab.id}"
+						aria-selected={activeTab === tab.id}
+						aria-controls="results-panel-{tab.id}"
+						tabindex={activeTab === tab.id ? 0 : -1}
+						class={`py-4 px-1 border-b-2 text-sm font-medium ${
+							activeTab === tab.id
+								? 'border-accent text-accent'
+								: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+						}`}
+						onclick={() => (activeTab = tab.id)}
+						onkeydown={(e) => onTabKeydown(e, i)}
+					>
+						{tab.label}
+						{#if tab.badge}
+							<span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded">
+								{tab.badge}
+							</span>
+						{/if}
+					</button>
+				{/each}
+			</div>
 		</div>
 
 		<!-- CSS toggle tabs: keep mounted to preserve in-flight state across tab switches -->
-		<div class:hidden={activeTab !== 'analysis'}>
+		<div class:hidden={activeTab !== 'analysis'} role="tabpanel" id="results-panel-analysis" aria-labelledby="results-tab-analysis">
 			<!-- Persistent recommendation banner (slim) — sits above the analysis content so
 			     the suggested next action is visible without discovering the Gaps tab. -->
 			{#if gapAnalysis?.recommendation}
@@ -1181,7 +1165,7 @@
 			{/if}
 		</div>
 
-		<div class:hidden={activeTab !== 'gaps'}>
+		<div class:hidden={activeTab !== 'gaps'} role="tabpanel" id="results-panel-gaps" aria-labelledby="results-tab-gaps">
 			{#if gapAnalysis}
 				<div class="card-standard mb-4">
 					<div class="flex flex-wrap items-center justify-between gap-3">
@@ -1273,7 +1257,7 @@
 			{/if}
 		</div>
 
-		<div class:hidden={activeTab !== 'letters'}>
+		<div class:hidden={activeTab !== 'letters'} role="tabpanel" id="results-panel-letters" aria-labelledby="results-tab-letters">
 			<div class="space-y-6">
 				<FindingsEmailSection
 					analysisId={results.analysis_id}
@@ -1300,11 +1284,11 @@
 			</div>
 		</div>
 
-		<div class:hidden={activeTab !== 'chat'}>
+		<div class:hidden={activeTab !== 'chat'} role="tabpanel" id="results-panel-chat" aria-labelledby="results-tab-chat">
 			<ChatTab analysisId={results.analysis_id} />
 		</div>
 
-		<div class:hidden={activeTab !== 'quality'}>
+		<div class:hidden={activeTab !== 'quality'} role="tabpanel" id="results-panel-quality" aria-labelledby="results-tab-quality">
 			<QualityTab
 				qualityReport={results.quality_report}
 				onviewdocument={viewDocument}

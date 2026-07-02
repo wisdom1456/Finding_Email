@@ -1,6 +1,5 @@
 """Tests for the small image filtering logic during Clio document import."""
 
-import pytest
 
 
 SMALL_IMAGE_THRESHOLD_BYTES = 50 * 1024  # 50KB

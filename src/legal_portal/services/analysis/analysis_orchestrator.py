@@ -6,10 +6,9 @@ and email deduplication have been split into dedicated sub-modules.
 """
 
 import asyncio
-import hashlib
-import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -20,21 +19,16 @@ from typing import Any, Dict, List, Optional
 
 from starlette.concurrency import run_in_threadpool
 
-from legal_portal.api.middleware.retry import retry_sync
 from legal_portal.core.analysis_state import (
     AnalysisCancelledError,
     _analysis_is_cancelled,
     _cancel_analysis,
     _update_analysis_progress,
-    _update_case_with_retry,
-    _upsert_with_retry,
 )
 from legal_portal.core.signature_detection import (
     _apply_signature_verification_override,
     _infer_signature_detection_from_text,
-    _is_pdf_like_document,
     _is_signature_inference_candidate,
-    _sample_text_for_state_hash,
 )
 from legal_portal.config.default import get_settings
 from legal_portal.core.data_models import (
@@ -50,7 +44,7 @@ from legal_portal.services.shared.progress_manager import ProgressManager
 from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.security import sanitize_text_for_db
 from legal_portal.utils.throttled_db_writer import ThrottledDBWriter
-from legal_portal.utils.type_safety import safe_str, safe_str_required, sanitize_nested_dict
+from legal_portal.utils.type_safety import safe_str
 
 # ---------------------------------------------------------------------------
 # Re-exports: symbols moved to sub-modules but still imported by

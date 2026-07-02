@@ -19,7 +19,6 @@ from unittest.mock import MagicMock
 
 from legal_portal.core.models.analysis_models import (
     CaseRecommendationCategory,
-    ConfidenceLevel,
     RecommendedLetterType,
 )
 from legal_portal.services.analysis.gap_analysis_service import GapAnalysisService

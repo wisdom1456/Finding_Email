@@ -120,21 +120,26 @@ IMPORTANT: You must analyze ALL {len(image_files)} images and provide a separate
 
         logger.debug(f"Batch vision response length: {len(response_text)} characters")
 
-        # Parse response and split by image
-        image_descriptions = _parse_batch_response(response_text, filenames)
+        # Parse response into filename -> description. Matching is by the
+        # filename the model echoes on each "## IMAGE N:" line, NOT by
+        # position: if the model reorders, merges, or skips sections, a
+        # positional zip would silently attribute text to the wrong exhibit —
+        # an integrity failure in a legal record.
+        descriptions_by_filename = _parse_batch_response(response_text, filenames)
 
-        # Validate we got descriptions for all images
-        if len(image_descriptions) != len(image_files):
+        # Validate every expected file has an identity-matched description
+        missing = [name for name in filenames if name not in descriptions_by_filename]
+        if missing:
             logger.warning(
-                f"Response contained {len(image_descriptions)} image sections "
-                f"but expected {len(image_files)}. Falling back to individual processing."
+                f"Batch response missing identity-matched sections for {missing} "
+                f"(got {sorted(descriptions_by_filename)}). Falling back to individual processing."
             )
-            # Fall back to individual processing
             return await _fallback_individual_processing(image_files)
 
         # Create ProcessedDocument for each image
         processed_docs = []
-        for (file_path, doc_type, original_filename), description in zip(image_files, image_descriptions):
+        for file_path, doc_type, original_filename in image_files:
+            description = descriptions_by_filename[original_filename]
             file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
             file_metadata = FileMetadata(filename=original_filename, size=file_size)
 
@@ -165,8 +170,14 @@ IMPORTANT: You must analyze ALL {len(image_files)} images and provide a separate
         return await _fallback_individual_processing(image_files)
 
 
-def _parse_batch_response(response_text: str, expected_filenames: List[str]) -> List[str]:
-    """Parse batch vision response into individual image descriptions.
+def _parse_batch_response(response_text: str, expected_filenames: List[str]) -> dict[str, str]:
+    """Parse batch vision response into descriptions keyed by filename.
+
+    Each section's echoed filename (the text after "## IMAGE N:") is matched
+    against the expected filenames so descriptions bind to the right document
+    even if the model reorders or renumbers sections. Sections whose filename
+    cannot be matched unambiguously are dropped (the caller falls back to
+    individual processing when anything is missing).
 
     Args:
     ----
@@ -175,33 +186,48 @@ def _parse_batch_response(response_text: str, expected_filenames: List[str]) -> 
 
     Returns:
     -------
-        List of descriptions (one per image, in order)
+        Mapping of expected filename -> description for every section that
+        could be identity-matched.
 
     """
-    descriptions = []
+    # Normalized lookup of expected names (case/whitespace tolerant)
+    normalized_expected = {name.strip().casefold(): name for name in expected_filenames}
 
-    # Split by image markers
+    descriptions: dict[str, str] = {}
+
+    # Split by image markers, keeping each section's echoed filename line.
     # Pattern: ## IMAGE N: filename
-    image_sections = re.split(r"##\s*IMAGE\s+\d+:", response_text, flags=re.IGNORECASE)
+    image_sections = re.split(r"##\s*IMAGE\s+\d+\s*:", response_text, flags=re.IGNORECASE)
 
-    # First element is text before first marker (discard)
-    if len(image_sections) > 1:
-        image_sections = image_sections[1:]
-
-    for section in image_sections:
-        # Clean up the description
-        # Remove the filename line (first line)
+    # First element is text before the first marker (discard)
+    for section in image_sections[1:]:
         lines = section.strip().split("\n")
-        if len(lines) > 1:
-            # Skip first line (filename), join the rest
-            description = "\n".join(lines[1:]).strip()
-        else:
-            description = section.strip()
+        echoed_name = lines[0].strip().strip("*_` ") if lines else ""
+        description = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
 
+        matched = normalized_expected.get(echoed_name.casefold())
+        if matched is None:
+            # Tolerate the model decorating the name (e.g. quotes, trailing
+            # punctuation) by falling back to a substring containment check —
+            # but only when exactly one expected name matches.
+            candidates = [
+                original
+                for norm, original in normalized_expected.items()
+                if norm and norm in echoed_name.casefold()
+            ]
+            if len(candidates) == 1:
+                matched = candidates[0]
+
+        if matched is None:
+            logger.warning(f"Batch section filename {echoed_name!r} did not match any expected file")
+            continue
+        if matched in descriptions:
+            logger.warning(f"Batch response contained duplicate section for {matched!r}; keeping first")
+            continue
         if description:
-            descriptions.append(description)
+            descriptions[matched] = description
 
-    logger.debug(f"Parsed {len(descriptions)} image descriptions from batch response")
+    logger.debug(f"Parsed {len(descriptions)} identity-matched image descriptions from batch response")
     return descriptions
 
 

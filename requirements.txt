@@ -27,6 +27,8 @@ PyPDF2>=3.0.0
 # Document Output (REQUIRED for analysis results)
 html2text>=2020.1.16
 markdown2>=2.4.0
+nh3>=0.2  # HTML sanitization for LLM-generated letters
+sentry-sdk>=2.0  # Optional error tracking (active only when SENTRY_DSN set)
 
 # Utility Libraries
 tenacity>=8.2.3

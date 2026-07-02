@@ -13,7 +13,7 @@ import tempfile
 import time
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Optional, Tuple
+from typing import Tuple
 
 from legal_portal.config.default import settings
 from legal_portal.utils.logging_config import get_module_logger

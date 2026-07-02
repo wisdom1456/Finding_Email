@@ -10,11 +10,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from legal_portal.core.models.document_models import DocumentSummaryStructured, SkippedDocument
+from legal_portal.core.models.document_models import SkippedDocument
 from legal_portal.services.analysis.document_triage import (
     TriageTier,
     triage_document,
-    triage_documents,
 )
 
 

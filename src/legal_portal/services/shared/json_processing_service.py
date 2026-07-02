@@ -17,6 +17,7 @@ from openai import (
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from legal_portal.core.data_models import ProcessingError
+from legal_portal.services.shared.html_sanitizer import sanitize_letter_html
 from legal_portal.services.letters.letter_validation_service import LetterValidationService
 from legal_portal.services.letters.letter_strategy_service import LetterStrategyService
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
@@ -1189,7 +1190,7 @@ class JsonProcessingService:
                 raise ValueError(error_msg)
 
             logger.info("Converting Markdown response to HTML")
-            html_content = self._convert_markdown_to_html(markdown_response)
+            html_content = self._convert_markdown_to_html(markdown_response, jurisdiction=jurisdiction)
 
             logger.info(
                 "Successfully generated HTML letter",
@@ -1481,7 +1482,7 @@ class JsonProcessingService:
         )
 
         # Convert to HTML
-        html_content = self._convert_markdown_to_html(markdown_response)
+        html_content = self._convert_markdown_to_html(markdown_response, jurisdiction=jurisdiction)
 
         logger.info("Successfully generated letter from JSON", extra={"html_length": len(html_content)})
 
@@ -1706,7 +1707,7 @@ class JsonProcessingService:
         )
 
         # Convert to HTML
-        html_content = self._convert_markdown_to_html(markdown_response)
+        html_content = self._convert_markdown_to_html(markdown_response, jurisdiction=jurisdiction)
 
         # Stage 5: Log Final Letter
         if diag_logger:
@@ -2063,12 +2064,14 @@ class JsonProcessingService:
             f"{strategy_json}\n"
         )
 
-    def _convert_markdown_to_html(self, markdown_content: str) -> str:
+    def _convert_markdown_to_html(self, markdown_content: str, jurisdiction: str = "Florida") -> str:
         """Convert Markdown content to clean HTML.
 
         Args:
         ----
             markdown_content: Markdown text from OpenAI response
+            jurisdiction: State jurisdiction, used for citation verification
+                when ENABLE_CITATION_ANNOTATIONS is on
 
         Returns:
         -------
@@ -2080,6 +2083,35 @@ class JsonProcessingService:
 
         # Clean the markdown content first - remove any code fences or extra formatting
         cleaned_markdown = self._clean_markdown_response(markdown_content)
+
+        # Flag-gated: verify statute citations against the corpus and mark the
+        # ones that fail inline, plus a banner the reviewer can't miss. Never
+        # blocks generation; annotation failure falls back to the clean text.
+        unverified_banner = ""
+        from legal_portal.config.default import settings as _settings
+        if _settings.enable_citation_annotations:
+            try:
+                from legal_portal.services.shared.statute_validation_service import (
+                    get_statute_validation_service,
+                )
+
+                validator = get_statute_validation_service(jurisdiction=jurisdiction)
+                cleaned_markdown, validation = validator.annotate_unverified_citations(cleaned_markdown)
+                flagged = validation.unverified_citations + validation.suspicious_citations
+                if flagged:
+                    # Inline styles because the letter renders in a sandboxed
+                    # iframe / downloaded file where app CSS is absent. This
+                    # banner is trusted generated markup added post-sanitize.
+                    unverified_banner = (
+                        '<div class="citation-warning-banner" style="background:#fef3cd;'
+                        'border:1px solid #f0ad4e;border-radius:4px;padding:10px 14px;'
+                        'margin-bottom:16px;color:#7a5b00;font-size:14px;">'
+                        f"&#9888; {flagged} statute citation(s) could not be verified against the "
+                        f"{jurisdiction} statute corpus and are marked [unverified] below. "
+                        "Verify before sending.</div>\n"
+                    )
+            except Exception as annotate_err:
+                logger.error(f"Citation annotation failed (letter unmodified): {annotate_err}")
 
         # Configure markdown2 with appropriate extras for legal documents
         extras = [
@@ -2095,6 +2127,10 @@ class JsonProcessingService:
             # Convert markdown to HTML
             html_content = markdown2.markdown(cleaned_markdown, extras=extras)
 
+            # Model output is untrusted: strip any embedded active markup
+            # before the trusted class/wrapper transformations below.
+            html_content = sanitize_letter_html(html_content)
+
             # Apply semantic CSS classes to known structural elements
             html_content = re.sub(
                 r'(<p>This analysis is based on the documents provided.*?</p>)',
@@ -2108,7 +2144,7 @@ class JsonProcessingService:
             )
 
             # Wrap in a legal-letter container div for styling consistency
-            wrapped_html = f'<div class="legal-letter">\\n{html_content}\\n</div>'
+            wrapped_html = f'<div class="legal-letter">\\n{unverified_banner}{html_content}\\n</div>'
 
             # Ensure proper HTML structure
             if not wrapped_html.startswith("<html"):

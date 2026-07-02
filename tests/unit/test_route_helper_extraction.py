@@ -99,15 +99,8 @@ class TestReExportCompatibility:
         """Route-specific helpers and models must still exist in _analysis_helpers."""
         from legal_portal.api.routes._analysis_helpers import (
             _ensure_case_access,
-            _fetch_latest_analysis_result,
             _new_generation_metrics,
-            _emit_generation_metrics,
-            _to_sse,
-            _quality_report_placeholder,
             AnalysisRequest,
-            AnalysisResponse,
-            LetterGenerationRequest,
-            GapAnalysisRequest,
         )
 
         assert callable(_ensure_case_access)

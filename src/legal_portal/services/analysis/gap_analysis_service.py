@@ -14,7 +14,6 @@ import time
 from typing import Any, Dict, List, Optional, Set
 
 from legal_portal.core.data_models import (
-    BatchEvidence,
     BatchFinding,
     BatchGapReport,
     CaseRecommendation,

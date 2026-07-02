@@ -12,7 +12,7 @@ transition. The frontend polls GET /jobs/{id}/status to read this data.
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from legal_portal.utils.logging_config import get_module_logger
@@ -75,7 +75,7 @@ class DBProgressManager:
             "message": kwargs.get("message", ""),
             "phase": phase,
             "percent": kwargs.get("percent", 0),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         if kwargs.get("stage"):
             payload["stage"] = kwargs["stage"]

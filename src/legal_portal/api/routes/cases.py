@@ -13,7 +13,6 @@ from legal_portal.api.dependencies import get_current_user, get_supabase_client,
 from legal_portal.api.services.clio_client import ClioAPIError, ClioAuthError, ClioClient
 from legal_portal.services.cases.clio_import_service import (
     analyze_intake_documents,
-    analyze_intake_priority,
     get_clio_client_for_user as _get_clio_client_for_user_impl,
     import_clio_documents_helper,
     process_clio_import_background,
@@ -158,7 +157,7 @@ async def create_case(
         )
 
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating case: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error creating case"
         ) from e
 
 
@@ -195,8 +194,9 @@ async def list_cases(
 
         return response.data
     except Exception as e:
+        logger.exception("Error fetching cases")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching cases: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error fetching cases"
         ) from e
 
 
@@ -229,8 +229,9 @@ async def get_case(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Error fetching case")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error fetching case: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error fetching case"
         ) from e
 
 
@@ -273,8 +274,9 @@ async def update_case(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Error updating case")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating case: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error updating case"
         ) from e
 
 
@@ -343,7 +345,7 @@ async def delete_case(
     except Exception as e:
         logger.error("Error in delete_case", extra={"case_id": case_id, "error": str(e)})
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error deleting case: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error deleting case"
         ) from e
 
 
@@ -358,9 +360,11 @@ async def get_clio_client_for_user(
     try:
         return await _get_clio_client_for_user_impl(user, supabase)
     except ClioAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Clio authentication failed: {str(e)}") from e
+        logger.exception("Clio authentication failed")
+        raise HTTPException(status_code=401, detail="Clio authentication failed") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize Clio client: {str(e)}") from e
+        logger.exception("Failed to initialize Clio client")
+        raise HTTPException(status_code=500, detail="Failed to initialize Clio client") from e
 
 
 @router.post("/create-from-clio", response_model=CreateFromClioResponse)
@@ -573,7 +577,7 @@ async def create_case_from_clio(
             )
 
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error creating case: {error_msg}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error creating case"
         ) from e
 
 
@@ -763,7 +767,7 @@ async def set_intake_form(
     except Exception as e:
         logger.exception("Error updating intake form", extra={"error": str(e)})
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating intake form: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error updating intake form"
         ) from e
 
 
@@ -913,13 +917,15 @@ async def change_clio_matter(
     except HTTPException:
         raise
     except ClioAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}") from e
+        logger.exception("Clio authentication error")
+        raise HTTPException(status_code=401, detail="Clio authentication error") from e
     except ClioAPIError as e:
-        raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}") from e
+        logger.exception("Clio API error")
+        raise HTTPException(status_code=500, detail="Clio API error") from e
     except Exception as e:
         logger.exception("Error changing matter", extra={"error": str(e)})
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error changing matter: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error changing matter"
         ) from e
 
 
@@ -956,5 +962,5 @@ async def dedup_case_documents(
         logger.exception("Error running dedup", extra={"case_id": case_id, "error": str(e)})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error running dedup: {str(e)}",
+            detail="Error running dedup",
         ) from e

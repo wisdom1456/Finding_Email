@@ -175,8 +175,8 @@ def test_resolve_letter_identity_exposes_new_profile_fields():
             {
                 "id": "user-4",
                 "full_name": "Franklin Riley",
-                "firm_name": "Bernhardt Riley Law Firm",
-                "firm_address": "2706 US-19 ALT\nSuite 213\nPalm Harbor, FL 34683",
+                "firm_name": "Bernhardt Riley, Attorneys at Law, PLLC",
+                "firm_address": "1810 Wellness Lane\nSuite A\nTrinity, FL 34655",
                 "phone": "(727) 275-9575",
                 "email": "franklin@brflorida.com",
                 "email_signature": None,
@@ -192,7 +192,7 @@ def test_resolve_letter_identity_exposes_new_profile_fields():
         artifacts={},
     )
 
-    assert resolved["firm_address"] == "2706 US-19 ALT\nSuite 213\nPalm Harbor, FL 34683"
+    assert resolved["firm_address"] == "1810 Wellness Lane\nSuite A\nTrinity, FL 34655"
     assert resolved["bar_number"] == "FL-12345"
     assert resolved["demand_deadline_default"] == "21 days from receipt"
     # email_signature is optional and not set here — must be None, not ""

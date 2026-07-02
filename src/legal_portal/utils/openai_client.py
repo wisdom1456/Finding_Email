@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -58,6 +59,29 @@ class OpenAIClient:
 
         # Store user preferences for model selection
         self.user_preferences = user_preferences or {}
+
+        # Optional per-case seed (ENABLE_DETERMINISTIC_SEED). When set, every
+        # chat-completions request from this client carries it, reducing
+        # run-to-run drift when the same case is re-analyzed.
+        self.default_seed: Optional[int] = None
+
+    def set_case_seed(self, case_id: str) -> None:
+        """Derive and pin a deterministic seed for this case, if the flag is on.
+
+        No-op when ENABLE_DETERMINISTIC_SEED is off, so callers can invoke it
+        unconditionally.
+        """
+        if not settings.enable_deterministic_seed:
+            return
+        if not case_id:
+            return
+        self.default_seed = int(hashlib.sha256(case_id.encode()).hexdigest()[:8], 16)
+        logger.info(f"[SEED] Deterministic seed {self.default_seed} pinned for case {case_id[:12]}")
+
+    def _maybe_add_seed(self, request_params: Dict[str, Any]) -> None:
+        """Inject the pinned per-case seed into a request, when set."""
+        if self.default_seed is not None:
+            request_params["seed"] = self.default_seed
 
     def get_preferred_model(self, operation_type: str, fallback: str = "gpt-5.5") -> str:
         """Get the user's preferred model for a specific operation type.
@@ -132,6 +156,7 @@ class OpenAIClient:
                     if max_tokens is not None:
                         request_params["max_tokens"] = max_tokens
 
+                self._maybe_add_seed(request_params)
                 response = self.client.chat.completions.create(**request_params)
 
                 content = response.choices[0].message.content
@@ -246,7 +271,10 @@ class OpenAIClient:
         pricing = MODEL_PRICING
 
         if model not in pricing:
-            logger.info(f"OPENAI CLIENT: ⚠️  Unknown model for cost estimation: {model}")
+            logger.warning(
+                f"OPENAI CLIENT: unknown model for cost estimation: {model} — "
+                f"cost reported as $0.00; add it to MODEL_PRICING in core/constants.py"
+            )
             return 0.0
 
         model_pricing = pricing[model]
@@ -366,6 +394,7 @@ class OpenAIClient:
             # Make the API call
             if timeout is not None:
                 request_params["timeout"] = timeout
+            self._maybe_add_seed(request_params)
             response = self.client.chat.completions.create(**request_params)
 
             content = response.choices[0].message.content
@@ -462,6 +491,7 @@ class OpenAIClient:
                 request_params["response_format"] = response_format
 
             # Make the API call
+            self._maybe_add_seed(request_params)
             response = await self.async_client.chat.completions.create(**request_params)
 
             content = response.choices[0].message.content
@@ -550,6 +580,7 @@ class OpenAIClient:
                     request_params["max_tokens"] = max_tokens
                 request_params["temperature"] = temperature
 
+            self._maybe_add_seed(request_params)
             stream = await self.async_client.chat.completions.create(**request_params)
 
             async for chunk in stream:
@@ -575,6 +606,7 @@ class OpenAIClient:
         verbosity: Optional[str] = None,
         max_output_tokens: Optional[int] = None,
         max_retries: int = 2,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Create a response using Chat Completions API.
         
@@ -627,7 +659,11 @@ class OpenAIClient:
                     if max_output_tokens:
                         request_params["max_tokens"] = max_output_tokens
 
+                if response_format is not None:
+                    request_params["response_format"] = response_format
+
                 # Make the API call using Chat Completions
+                self._maybe_add_seed(request_params)
                 response = self.client.chat.completions.create(**request_params)
 
                 content = response.choices[0].message.content
@@ -737,6 +773,7 @@ class OpenAIClient:
             if verbosity and self._is_gpt5_model(model):
                 request_params["extra_body"] = {"verbosity": verbosity}
 
+            self._maybe_add_seed(request_params)
             response = await self.async_client.chat.completions.create(**request_params)
 
             content = response.choices[0].message.content
@@ -788,6 +825,7 @@ class OpenAIClient:
             if verbosity and self._is_gpt5_model(model):
                 request_params["extra_body"] = {"verbosity": verbosity}
 
+            self._maybe_add_seed(request_params)
             stream = await self.async_client.chat.completions.create(**request_params)
 
             async for chunk in stream:

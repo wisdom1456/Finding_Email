@@ -10,8 +10,6 @@ from legal_portal.core.data_models import DocumentSummaryStructured
 from legal_portal.services.analysis.multi_stage_analyzer import (
     ContextBuildResult,
     MultiStageAnalyzer,
-    _DEFAULT_BUDGET_TOKENS,
-    _MAX_ENTRY_TOKENS,
 )
 
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 from datetime import datetime, timedelta
 from functools import lru_cache, wraps
 from pathlib import Path
@@ -331,65 +330,12 @@ class DocumentCache:
         """Initialize with optional custom cache manager."""
         self.cache = cache_manager or get_cache_manager()
 
-    def cache_document_analysis(self, document_id: str, analysis_result: Dict[str, Any]):
-        """Cache document analysis results."""
-        key = f"doc_analysis:{document_id}"
-        self.cache.set(key, analysis_result, ttl=86400 * 7)  # Cache for 7 days
-
-    def get_document_analysis(self, document_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve cached document analysis."""
-        key = f"doc_analysis:{document_id}"
-        return self.cache.get(key)
-
-    def cache_embeddings(self, text_hash: str, embeddings: Any):
-        """Cache text embeddings."""
-        key = f"embeddings:{text_hash}"
-        self.cache.set(key, embeddings, ttl=86400 * 30)  # Cache for 30 days
-
-    def get_embeddings(self, text_hash: str) -> Optional[Any]:
-        """Retrieve cached embeddings."""
-        key = f"embeddings:{text_hash}"
-        return self.cache.get(key)
-
-    def cache_api_response(self, prompt_hash: str, response: str, model: str = "gpt-4"):
-        """Cache API responses."""
-        key = f"api_response:{model}:{prompt_hash}"
-        self.cache.set(key, response, ttl=86400 * 3)  # Cache for 3 days
-
-    def get_api_response(self, prompt_hash: str, model: str = "gpt-4") -> Optional[str]:
-        """Retrieve cached API response."""
-        key = f"api_response:{model}:{prompt_hash}"
-        return self.cache.get(key)
-
-    def cache_generated_document(self, case_id: str, doc_type: str, content: str):
-        """Cache generated documents with 24-hour TTL.
-
-        Args:
-        ----
-            case_id: Unique case identifier
-            doc_type: 'findings_letter', 'appendix', or 'case_analysis'
-            content: HTML content to cache
-
-        """
-        key = f"generated_doc:{case_id}:{doc_type}"
-        self.cache.set(key, content, ttl=86400)  # 24 hours
-        logger.info(f"Cached generated document: {case_id}:{doc_type}")
-
-    def get_generated_document(self, case_id: str, doc_type: str) -> Optional[str]:
-        """Retrieve cached generated document.
-
-        Args:
-        ----
-            case_id: Unique case identifier
-            doc_type: 'findings_letter', 'appendix', or 'case_analysis'
-
-        Returns:
-        -------
-            Cached HTML content if available, None otherwise
-
-        """
-        key = f"generated_doc:{case_id}:{doc_type}"
-        return self.cache.get(key)
+    # NOTE: former cache_document_analysis / cache_embeddings /
+    # cache_api_response / cache_generated_document helpers were removed —
+    # they had zero callers, and their keys omitted model/prompt version, so
+    # any future caller would have served stale content across upgrades. The
+    # document-summary cache below is the live, version-safe pattern (key
+    # includes doc_id + text hash + model + tier, built in main_processor).
 
     def cache_document_summary(self, cache_key: str, summary: Dict[str, Any], ttl: int = 86400 * 7):
         """Cache a document summary dict keyed by content+tier+model hash. TTL: 7 days."""

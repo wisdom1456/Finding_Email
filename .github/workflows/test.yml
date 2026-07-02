@@ -29,12 +29,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
       
-      - name: Lint Python with ruff
+      # Correctness rules are BLOCKING — they catch real bugs (undefined
+      # names, duplicate/unused imports, syntax errors). This gate found two
+      # live NameError bugs when introduced. The full style ruleset stays
+      # advisory until the backlog (~1.5k findings) is burned down; widen the
+      # --select list as categories reach zero.
+      - name: Lint Python with ruff (correctness — blocking)
         run: |
           pip install ruff
-          ruff check src/ tests/
+          ruff check src/ tests/ worker/ --select F401,F811,F821,F823,F702,E9
+
+      - name: Lint Python with ruff (style — advisory)
+        run: |
+          ruff check src/ tests/ worker/
         continue-on-error: true
-      
+
       - name: Type check Python with mypy
         run: |
           pip install mypy

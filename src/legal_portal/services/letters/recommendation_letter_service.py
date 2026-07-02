@@ -22,6 +22,7 @@ from legal_portal.core.data_models import (
     RecommendedLetterType,
 )
 from legal_portal.services.shared.document_formatter import DocumentFormatterService
+from legal_portal.services.shared.html_sanitizer import sanitize_letter_html
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
 from legal_portal.utils.type_safety import safe_str_required
@@ -363,9 +364,11 @@ class RecommendationLetterService:
         client_name: Optional[str] = None,
     ) -> str:
         """Convert recommendation markdown into formatted HTML."""
-        html = markdown2.markdown(
-            markdown_content,
-            extras=["tables", "smarty-pants", "fenced-code-blocks", "cuddled-lists"],
+        html = sanitize_letter_html(
+            markdown2.markdown(
+                markdown_content,
+                extras=["tables", "smarty-pants", "fenced-code-blocks", "cuddled-lists"],
+            )
         )
         return DocumentFormatterService.format_recommendation_letter(
             letter_html=html,

@@ -926,15 +926,18 @@
 		}
 	}
 
-	async function cancelAnalysis() {
+	let showCancelAnalysisConfirm = $state(false);
+
+	function cancelAnalysis() {
+		showCancelAnalysisConfirm = true;
+	}
+
+	async function confirmCancelAnalysis() {
 		try {
 			const { session, user } = await getSecureSession();
 
 			if (!session || !user) throw new Error('Not authenticated');
 			if (!analysisStatus?.id) throw new Error('No analysis to cancel');
-
-			const ok = confirm('Cancel the current analysis? This will stop processing and allow you to run a new analysis.');
-			if (!ok) return;
 
 			// Stop any active progress stream immediately
 			progressStore.disconnect();
@@ -1815,6 +1818,16 @@
 	confirmText="Re-run"
 	variant="warning"
 	onConfirm={() => runAnalysis()}
+/>
+
+<!-- Cancel Analysis Confirmation Dialog -->
+<ConfirmDialog
+	bind:open={showCancelAnalysisConfirm}
+	title="Cancel Analysis"
+	message="Cancel the current analysis? This will stop processing and allow you to run a new analysis."
+	confirmText="Cancel Analysis"
+	variant="warning"
+	onConfirm={confirmCancelAnalysis}
 />
 
 <!-- Analysis progress is now shown inline on the Analysis tab -->

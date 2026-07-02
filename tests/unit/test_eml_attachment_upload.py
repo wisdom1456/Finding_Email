@@ -1,11 +1,10 @@
 """Tests for uploading PDF attachments extracted from EMLs."""
 
 import hashlib
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from legal_portal.core.data_models import DocumentStatus
 
 
 class TestAttachmentUpload:

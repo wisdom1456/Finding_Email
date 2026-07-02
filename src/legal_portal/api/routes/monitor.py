@@ -31,6 +31,12 @@ router = APIRouter(prefix="/monitor", tags=["monitor"])
 STUCK_JOB_MINUTES = 15
 ZOMBIE_WORKER_MINUTES = 10
 RESTART_COOLDOWN_MINUTES = 30
+# Worker heartbeats every 30s; anything fresher than this proves it is alive.
+FRESH_HEARTBEAT_MINUTES = 2
+# Fast-failing jobs never trip the stuck/zombie checks — alert when failures
+# spike inside this window instead.
+FAILED_SPIKE_WINDOW_MINUTES = 30
+FAILED_SPIKE_THRESHOLD = int(os.getenv("FAILED_SPIKE_THRESHOLD", "3"))
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +85,33 @@ def check_worker_health(authorization: str = Header(default="")):
     )
     has_recent_claim = (recent_claims.count or 0) > 0
 
-    zombie_detected = pending_count > 0 and not has_recent_claim
+    # A single-job worker legitimately stops claiming while it grinds through
+    # a long analysis. A running job with a fresh heartbeat proves the worker
+    # is alive, so it must veto the zombie signal — otherwise the auto-redeploy
+    # below kills healthy in-flight work.
+    heartbeat_cutoff = _minutes_ago_iso(FRESH_HEARTBEAT_MINUTES)
+    fresh_running = (
+        sb.table("analysis_jobs")
+        .select("id", count="exact")
+        .eq("status", "running")
+        .gte("heartbeat_at", heartbeat_cutoff)
+        .execute()
+    )
+    has_fresh_running_heartbeat = (fresh_running.count or 0) > 0
+
+    zombie_detected = pending_count > 0 and not has_recent_claim and not has_fresh_running_heartbeat
+
+    # --- Check 3: Failure spike (jobs failing fast, not hanging) ---
+    failed_cutoff = _minutes_ago_iso(FAILED_SPIKE_WINDOW_MINUTES)
+    recent_failed = (
+        sb.table("analysis_jobs")
+        .select("id", count="exact")
+        .eq("status", "failed")
+        .gte("updated_at", failed_cutoff)
+        .execute()
+    )
+    failed_count = recent_failed.count or 0
+    failed_spike = failed_count >= FAILED_SPIKE_THRESHOLD
 
     # --- Build result ---
     checks = {
@@ -91,19 +123,31 @@ def check_worker_health(authorization: str = Header(default="")):
         "worker_inactive": {
             "pending_count": pending_count,
             "has_recent_claim": has_recent_claim,
+            "has_fresh_running_heartbeat": has_fresh_running_heartbeat,
             "threshold_minutes": ZOMBIE_WORKER_MINUTES,
             "triggered": zombie_detected,
         },
+        "failed_spike": {
+            "count": failed_count,
+            "window_minutes": FAILED_SPIKE_WINDOW_MINUTES,
+            "threshold": FAILED_SPIKE_THRESHOLD,
+            "triggered": failed_spike,
+        },
     }
 
-    any_alert = len(stuck_jobs) > 0 or zombie_detected
+    # Dead-worker cleanup: propagate terminal job state to analysis_results /
+    # cases. The worker also runs this, but when the worker is down (the exact
+    # scenario this monitor exists for) nobody else would.
+    reconciled_count = _run_reconcile(sb)
+
+    any_alert = len(stuck_jobs) > 0 or zombie_detected or failed_spike
 
     if not any_alert:
         if pending_count == 0:
             logger.info("[MONITOR] Healthy — no pending jobs")
-            return {"status": "no_pending_jobs", "checks": checks}
+            return {"status": "no_pending_jobs", "checks": checks, "reconciled": reconciled_count}
         logger.info("[MONITOR] Healthy — worker is active")
-        return {"status": "healthy", "checks": checks}
+        return {"status": "healthy", "checks": checks, "reconciled": reconciled_count}
 
     # --- Build alert message ---
     oldest_age_minutes = _oldest_job_age_minutes(stuck_jobs)
@@ -113,6 +157,8 @@ def check_worker_health(authorization: str = Header(default="")):
         alerts_triggered.append("STUCK_JOBS")
     if zombie_detected:
         alerts_triggered.append("WORKER_INACTIVE")
+    if failed_spike:
+        alerts_triggered.append("FAILED_SPIKE")
 
     message = _build_slack_message(
         alerts=alerts_triggered,
@@ -121,6 +167,7 @@ def check_worker_health(authorization: str = Header(default="")):
         pending_count=pending_count,
         env=env,
         now=now,
+        failed_count=failed_count,
     )
 
     # --- Send alert ---
@@ -131,8 +178,11 @@ def check_worker_health(authorization: str = Header(default="")):
         logger.error("[ALERT] Failed to send webhook alert")
 
     # --- Optional auto-recovery ---
+    # Redeploy only on the true dead-worker signal. STUCK_JOBS alone can just
+    # mean a deep queue behind a long-running job — restarting Railway then
+    # would kill healthy in-flight work.
     recovery_triggered = False
-    if os.getenv("RAILWAY_API_TOKEN") and any_alert:
+    if os.getenv("RAILWAY_API_TOKEN") and zombie_detected:
         recovery_triggered = _maybe_redeploy(sb)
 
     return {
@@ -141,6 +191,7 @@ def check_worker_health(authorization: str = Header(default="")):
         "checks": checks,
         "alert_sent": alert_sent,
         "recovery_triggered": recovery_triggered,
+        "reconciled": reconciled_count,
     }
 
 
@@ -167,6 +218,19 @@ def _minutes_ago_iso(minutes: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
 
 
+def _run_reconcile(sb) -> int:
+    """Run reconcile_analysis_jobs(); return rows fixed (-1 on failure)."""
+    try:
+        result = sb.rpc("reconcile_analysis_jobs").execute()
+        fixed = len(result.data or [])
+        if fixed:
+            logger.warning(f"[MONITOR] Reconciled {fixed} orphaned job row(s)")
+        return fixed
+    except Exception as e:
+        logger.error(f"[MONITOR] reconcile_analysis_jobs failed: {e}")
+        return -1
+
+
 def _oldest_job_age_minutes(stuck_jobs: list[dict]) -> float:
     if not stuck_jobs:
         return 0.0
@@ -185,6 +249,7 @@ def _build_slack_message(
     pending_count: int,
     env: str,
     now: datetime,
+    failed_count: int = 0,
 ) -> dict:
     alert_label = " | ".join(alerts)
     ts = now.strftime("%Y-%m-%d %H:%M UTC")
@@ -195,6 +260,8 @@ def _build_slack_message(
         lines.append(f"• *STUCK_JOBS*: {stuck_count} job(s) pending >{STUCK_JOB_MINUTES}min (oldest: {oldest_age_minutes:.0f}min)")
     if "WORKER_INACTIVE" in alerts:
         lines.append(f"• *WORKER_INACTIVE*: {pending_count} job(s) queued, no claim in >{ZOMBIE_WORKER_MINUTES}min")
+    if "FAILED_SPIKE" in alerts:
+        lines.append(f"• *FAILED_SPIKE*: {failed_count} job(s) failed in the last {FAILED_SPIKE_WINDOW_MINUTES}min")
 
     lines.append("\n_Action: Check Railway worker logs or redeploy._")
 

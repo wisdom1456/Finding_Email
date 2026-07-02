@@ -65,7 +65,7 @@ npm run dev
 
 Open browser DevTools (F12) → Console tab. You should see:
 ```
-Initiating Clio OAuth with token: eyJhbGciOiJIUzI1N...
+Initiating Clio OAuth with token: <session-jwt>...
 ```
 
 Then you'll be redirected to Clio.

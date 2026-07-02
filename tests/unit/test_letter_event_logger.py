@@ -11,7 +11,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any, Dict, List
 
-import pytest
 
 from legal_portal.services.observability.letter_event_logger import (
     LetterEventLogger,

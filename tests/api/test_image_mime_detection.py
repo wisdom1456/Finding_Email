@@ -8,7 +8,6 @@ Verifies:
 
 from unittest.mock import patch, MagicMock
 
-import pytest
 
 
 # Standard magic bytes for common image formats

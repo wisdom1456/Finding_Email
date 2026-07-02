@@ -4,7 +4,6 @@ Executes the exact SELECT column lists from production code against real
 PostgreSQL to catch schema mismatches (e.g. the file_size KeyError).
 """
 
-import pytest
 
 from .conftest import pytestmark  # noqa: F401 – applies skip + marker
 

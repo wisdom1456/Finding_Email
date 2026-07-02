@@ -15,6 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ src/
 COPY worker/ worker/
+# Statute corpora — without these, citation validation silently treats every
+# citation as unverified (StatuteValidationService resolves them by walking
+# up from src/legal_portal to /app).
+COPY florida_legal_corpus/ florida_legal_corpus/
+COPY new_mexico_legal_corpus/ new_mexico_legal_corpus/
 
 HEALTHCHECK --interval=60s --timeout=10s CMD pgrep -f analysis_worker || exit 1
 

@@ -1,8 +1,7 @@
 """Unit tests for Clio API client pagination and data retrieval."""
 
 import pytest
-from unittest.mock import Mock, patch, call
-from datetime import datetime
+from unittest.mock import Mock, patch
 
 from legal_portal.api.services.clio_client import ClioClient, ClioAPIError, ClioRateLimitError
 

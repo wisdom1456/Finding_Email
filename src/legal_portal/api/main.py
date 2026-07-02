@@ -44,6 +44,11 @@ load_dotenv()
 setup_logging(app_name="legal-portal-api")
 logger = logging.getLogger(__name__)
 
+# Optional Sentry (no-op unless SENTRY_DSN is set)
+from legal_portal.utils.error_tracking import init_error_tracking  # noqa: E402
+
+init_error_tracking("api")
+
 # Rate limiter is imported from rate_limiter.py module
 
 
@@ -135,12 +140,19 @@ app.add_middleware(
 # Exception handlers
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Handle all uncaught exceptions."""
+    """Handle all uncaught exceptions.
+
+    Uses the same envelope as the AppError handler ({error, message, context})
+    and never leaks exception detail to clients outside debug mode — the full
+    traceback goes to the server log instead.
+    """
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "message": "Internal server error",
-            "detail": str(exc) if app.debug else "An error occurred",
+            "error": "InternalServerError",
+            "message": str(exc) if app.debug else "Internal server error",
+            "context": None,
         },
     )
 

@@ -5,8 +5,7 @@ full-dict helper always returns Dict[str, Any]. Prevents the regression
 from bf3e231 where changing the return type broke 7 callers.
 """
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-import asyncio
+from unittest.mock import MagicMock
 
 
 class TestMakeOpenAIRequestReturnTypes:

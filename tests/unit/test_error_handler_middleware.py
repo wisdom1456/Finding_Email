@@ -1,6 +1,5 @@
 """Tests for the AppError error handler middleware."""
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

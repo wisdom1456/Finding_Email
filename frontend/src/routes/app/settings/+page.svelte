@@ -16,10 +16,10 @@
 	let fullName = $state('');
 	let email = $state('');
 	let phone = $state('(727) 275-9575');
-	let firmName = $state('Bernhardt Riley Law Firm');
-	let firmAddress = $state(`2706 US-19 ALT
-Suite 213
-Palm Harbor, FL 34683`);
+	let firmName = $state('Bernhardt Riley, Attorneys at Law, PLLC');
+	let firmAddress = $state(`1810 Wellness Lane
+Suite A
+Trinity, FL 34655`);
 	let defaultJurisdiction = $state('Florida');
 	let barNumber = $state('');
 	let emailSignature = $state('');
@@ -74,7 +74,7 @@ Palm Harbor, FL 34683`);
 				const profile = await response.json();
 				fullName = profile.full_name || '';
 				phone = profile.phone || '(727) 275-9575';
-				firmName = profile.firm_name || 'Bernhardt Riley Law Firm';
+				firmName = profile.firm_name || 'Bernhardt Riley, Attorneys at Law, PLLC';
 				firmAddress = profile.firm_address || firmAddress;
 				defaultJurisdiction = profile.default_jurisdiction || 'Florida';
 				barNumber = profile.bar_number || '';

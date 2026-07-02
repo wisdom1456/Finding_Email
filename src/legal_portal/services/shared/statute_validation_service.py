@@ -142,9 +142,22 @@ class StatuteValidationService:
             raise ValueError(f"Unsupported jurisdiction: {jurisdiction}")
 
         if corpus_dir is None:
-            # Default to project corpus directory based on jurisdiction
-            project_root = Path(__file__).parents[3]
-            corpus_dir = project_root / self.config["corpus_path"]
+            # Walk upward from this file until the corpus directory is found.
+            # (A fixed parents[N] index silently broke here: from
+            # services/shared/ parents[3] is src/, not the repo root, so the
+            # corpus never loaded and every citation validated as unverified.)
+            for parent in Path(__file__).resolve().parents:
+                candidate = parent / self.config["corpus_path"]
+                if candidate.is_dir():
+                    corpus_dir = candidate
+                    break
+            else:
+                corpus_dir = Path(__file__).resolve().parents[3] / self.config["corpus_path"]
+                logger.error(
+                    f"Corpus directory '{self.config['corpus_path']}' not found in any "
+                    f"ancestor of {Path(__file__).resolve()} — citation validation will "
+                    f"treat every citation as unverified"
+                )
 
         self.corpus_dir = Path(corpus_dir)
         self.statutes: Dict[str, Dict] = {}
@@ -243,6 +256,39 @@ class StatuteValidationService:
         )
 
         return result
+
+    UNVERIFIED_MARKER = ' <sup class="citation-unverified">[unverified]</sup>'
+
+    def annotate_unverified_citations(self, letter_markdown: str) -> tuple[str, "ValidationResult"]:
+        """Mark every unverified/suspicious statute citation inline.
+
+        Appends a visible superscript marker after each citation that failed
+        corpus verification, so the reviewing attorney sees the risk in the
+        letter itself rather than in a warnings array. Returns the annotated
+        markdown and the validation result.
+        """
+        result = self.validate_letter(letter_markdown)
+
+        annotated = letter_markdown
+        flagged_texts = {ref.original_text for ref in [*result.unverified, *result.suspicious]}
+        # Drop any flagged text that is a substring of a longer flagged text —
+        # annotating both would insert a marker inside the longer citation.
+        flagged = sorted(
+            (t for t in flagged_texts if t and not any(t != o and t in o for o in flagged_texts)),
+            key=len,
+            reverse=True,
+        )
+        for text in flagged:
+            if text in annotated:
+                annotated = annotated.replace(text + self.UNVERIFIED_MARKER, text)  # idempotence guard
+                annotated = annotated.replace(text, text + self.UNVERIFIED_MARKER)
+
+        if flagged_texts:
+            logger.warning(
+                f"Annotated {len(flagged_texts)} unverified/suspicious citation(s) "
+                f"in letter for {self.jurisdiction}"
+            )
+        return annotated, result
 
     def _extract_citations(self, text: str) -> Set[str]:
         """Extract all statute and rule citations from text for the current jurisdiction."""

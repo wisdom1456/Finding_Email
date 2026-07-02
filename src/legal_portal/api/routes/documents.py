@@ -16,7 +16,6 @@ from legal_portal.core.document_processor import DocumentProcessor, ValidationEr
 from legal_portal.services.documents.document_registry_service import DocumentRegistryService
 from legal_portal.services.file_processors.eml_processor import process_eml
 from legal_portal.utils.google_vision_client import GoogleVisionClient
-from legal_portal.api.middleware.retry import is_transient_supabase_error, retry_async
 from legal_portal.utils.security import sanitize_text_for_db
 
 # Import extracted business logic from service layer
@@ -360,7 +359,7 @@ async def upload_document(
                         # Route to Cloud Run OCR service (Google Vision only)
                         try:
                             from legal_portal.utils.ocr_service_client import (
-                                get_ocr_client, OCRServiceError, OCRConfigError,
+                                get_ocr_client, OCRConfigError,
                             )
                             ocr_client = get_ocr_client()
                             img_content_type = file_type if file_type in ["image/png", "image/jpeg", "image/jpg"] else "image/png"

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 
 class TestCacheManagerRedisToggle:

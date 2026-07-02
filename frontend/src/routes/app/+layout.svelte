@@ -21,28 +21,18 @@
 	let isUserMenuOpen = $state(false);
 	let profile = $state<LetterProfile | null>(null);
 
-	// Check Clio connection status + load profile completeness check on mount
-	onMount(async () => {
-		await Promise.all([checkClioStatus(), loadProfile()]);
+	// Profile comes from the server layout load — re-fetching it client-side
+	// was a duplicate roundtrip on every app-shell mount.
+	$effect(() => {
+		if (data.profile) {
+			profile = data.profile as LetterProfile;
+		}
 	});
 
-	async function loadProfile() {
-		try {
-			const { data: { user } } = await supabase.auth.getUser();
-			if (!user) return;
-			const { data: profileRow } = await supabase
-				.from('profiles')
-				.select('full_name, default_jurisdiction')
-				.eq('id', user.id)
-				.single();
-			if (profileRow) {
-				profile = profileRow as LetterProfile;
-			}
-		} catch (err) {
-			// Banner stays hidden if profile fetch fails — fail-safe
-			console.debug('Profile completeness check skipped:', err);
-		}
-	}
+	// Check Clio connection status on mount
+	onMount(async () => {
+		await checkClioStatus();
+	});
 
 	async function checkClioStatus() {
 		try {
@@ -88,11 +78,21 @@
 			isUserMenuOpen = false;
 		}
 	}
-	
+
+	// Close menus on Escape (keyboard parity with outside-click)
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			isUserMenuOpen = false;
+			isMobileMenuOpen = false;
+		}
+	}
+
 	onMount(() => {
 		document.addEventListener('click', handleClickOutside);
+		document.addEventListener('keydown', handleKeydown);
 		return () => {
 			document.removeEventListener('click', handleClickOutside);
+			document.removeEventListener('keydown', handleKeydown);
 		};
 	});
 </script>
@@ -147,6 +147,9 @@
 						<button
 							onclick={toggleUserMenu}
 							class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-semibold text-white/90 hover:bg-white/10 hover:text-white transition-colors"
+							aria-haspopup="menu"
+							aria-expanded={isUserMenuOpen}
+							aria-label="User menu"
 						>
 							<User class="h-5 w-5" />
 							<span class="hidden lg:block max-w-[150px] truncate">{data.user?.email}</span>

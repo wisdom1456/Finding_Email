@@ -10,6 +10,7 @@ import markdown2
 
 from legal_portal.core.data_models import DeepAnalysis, DocumentSummaryStructured, FactMatrix, Party
 from legal_portal.services.shared.document_formatter import DocumentFormatterService
+from legal_portal.services.shared.html_sanitizer import sanitize_letter_html
 from legal_portal.services.letters.letter_strategy_service import LetterStrategyService
 from legal_portal.services.letters.signature_renderer import render_letter_signature_parts
 from legal_portal.utils.logging_config import get_module_logger
@@ -93,9 +94,12 @@ class DemandLetterService:
 
         markdown_content = self._clean_markdown_response(markdown_content)
 
-        # Convert markdown to HTML
-        html = markdown2.markdown(
-            markdown_content, extras=["tables", "smarty-pants", "fenced-code-blocks", "cuddled-lists"]
+        # Convert markdown to HTML, stripping any active markup the model
+        # (or injected document content) may have embedded.
+        html = sanitize_letter_html(
+            markdown2.markdown(
+                markdown_content, extras=["tables", "smarty-pants", "fenced-code-blocks", "cuddled-lists"]
+            )
         )
 
         # Apply professional formatting using DocumentFormatterService

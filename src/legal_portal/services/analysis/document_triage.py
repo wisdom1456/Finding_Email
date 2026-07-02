@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from enum import IntEnum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from legal_portal.utils.logging_config import get_module_logger
 

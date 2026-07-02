@@ -917,7 +917,6 @@ class DocumentRegistryService:
         Returns list of DocumentGroup. Documents not in any group are excluded.
         A document can appear in at most one group.
         """
-        import uuid
 
         groups: List[DocumentGroup] = []
 

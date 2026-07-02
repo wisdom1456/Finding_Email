@@ -10,7 +10,6 @@ Tests cover:
 - Small-group merge map chain termination
 """
 
-import hashlib
 import json
 
 import pytest
@@ -1138,7 +1137,7 @@ class TestAnalyzeGapsMapReduce:
     @pytest.mark.asyncio
     async def test_all_batches_fail_falls_back_to_single_pass(self):
         """When all map batches fail, falls back to single-pass."""
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import AsyncMock, MagicMock
 
         svc = self._make_service()
 

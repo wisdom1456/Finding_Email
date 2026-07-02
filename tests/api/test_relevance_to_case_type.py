@@ -5,7 +5,6 @@ Verifies:
 - DocumentSummaryStructured accepts the value without Pydantic warnings
 """
 
-import pytest
 
 
 class TestRelevanceToCaseType:

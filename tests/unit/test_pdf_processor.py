@@ -9,15 +9,12 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from datetime import datetime
-from io import BytesIO
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from legal_portal.core.data_models import (
     DocumentType,
-    FileMetadata,
     FileType,
     ProcessedDocument,
 )

@@ -67,9 +67,19 @@
 			}
 
 			const apiUrl = getApiUrl();
-			// Redirect to OAuth authorization with token as query param
-			// (Required because direct navigation can't set Authorization header)
-			window.location.href = `${apiUrl}/api/clio/authorize?token=${session.access_token}`;
+			// Fetch the authorization URL with header auth (keeps the session
+			// token out of query strings / server logs), then navigate to Clio.
+			const response = await fetch(`${apiUrl}/api/clio/authorize-url`, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${session.access_token}`
+				}
+			});
+			if (!response.ok) {
+				throw new Error('Failed to initiate Clio connection');
+			}
+			const { url } = await response.json();
+			window.location.href = url;
 		} catch (error: any) {
 			console.error('Failed to initiate Clio connection:', error);
 			errorMessage = error.message || 'Failed to initiate connection';

@@ -1,7 +1,7 @@
 """Tests for email thread deduplication."""
 
 import hashlib
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 

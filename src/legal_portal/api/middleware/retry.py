@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Callable, Set, Tuple, TypeVar
+from typing import Callable, Set, Tuple, TypeVar
 
 logger = logging.getLogger(__name__)
 

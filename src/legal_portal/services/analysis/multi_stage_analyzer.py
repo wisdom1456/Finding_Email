@@ -42,6 +42,7 @@ from legal_portal.services.shared.statute_recommendation_service import StatuteR
 from legal_portal.utils.diagnostic_logger import DiagnosticLogger
 from legal_portal.utils.logging_config import get_module_logger
 from legal_portal.utils.openai_client import OpenAIClient
+from legal_portal.utils.prompt_hardening import fence_untrusted, injection_guard_clause
 from legal_portal.utils.type_safety import safe_str_required
 
 logger = get_module_logger(__name__)
@@ -365,14 +366,14 @@ class MultiStageAnalyzer:
         return f"""Analyze this {jurisdiction} legal case. Output your analysis in clear markdown format with the sections below.
 
 Be specific - use actual names, dates, and dollar amounts from the documents. Cite specific {jurisdiction} statutes where applicable.
-
+{injection_guard_clause()}
 ---
 CLIENT INTAKE:
-{self._condense_intake_for_prompt(intake_content, max_chars=4000)}
+{fence_untrusted(self._condense_intake_for_prompt(intake_content, max_chars=4000), "CLIENT INTAKE")}
 
 ---
 CASE DOCUMENTS:
-{document_context}
+{fence_untrusted(document_context, "CASE DOCUMENTS")}
 
 ---
 OUTPUT YOUR ANALYSIS WITH THESE EXACT SECTIONS:
@@ -521,9 +522,10 @@ This block MUST be valid JSON wrapped in a code fence:
             jurisdiction=jurisdiction,
         )
 
+        stream_model = "gpt-5.5"
         logger.info(
             f"[STREAM:PROMPT_STATS] prompt_chars={len(prompt):,} "
-            f"model=gpt-5.4 reasoning_effort=medium max_tokens=24000 "
+            f"model={stream_model} reasoning_effort=medium max_tokens=24000 "
             f"setup_elapsed={time.time()-_t_streaming_start:.2f}s"
         )
 
@@ -540,7 +542,7 @@ IMPORTANT: Your response MUST end with the ```json structured data block as spec
             token_count = 0
             try:
                 async for token in self.client.create_chat_completion_stream(
-                    model="gpt-5.5",
+                    model=stream_model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt}
@@ -1194,15 +1196,15 @@ DOCUMENTS:
 
         prompt = f"""You are a precise legal fact extractor focusing on a matter in {jurisdiction}.
 Extract ONLY factual information from the case materials. Do NOT perform legal analysis.
-
+{injection_guard_clause()}
 INTAKE INFORMATION:
-{self._condense_intake_for_prompt(intake_content, max_chars=5000)}
+{fence_untrusted(self._condense_intake_for_prompt(intake_content, max_chars=5000), "INTAKE INFORMATION")}
 
 DOCUMENT REGISTRY (AUTHORITATIVE CLASSIFICATION/EXECUTION SIGNALS):
 {registry_context}
 
 DOCUMENT SUMMARIES:
-{json.dumps(docs_context, indent=2)}
+{fence_untrusted(json.dumps(docs_context, indent=2), "DOCUMENT SUMMARIES")}
 
 Extract and structure the following facts:
 
@@ -1357,19 +1359,62 @@ RULES:
             fact_data = json.loads(raw_response)
         except json.JSONDecodeError as e:
             logger.error(f"[STAGE:1:ERROR] JSON parse failed: {e}. Response: {raw_response[:500]}")
-            raise ValueError(f"Failed to parse fact extraction response as JSON: {e}")
 
-        # Log null source_document values before Pydantic coerces them
+            from legal_portal.config.default import settings as _settings
+            if not _settings.enable_strict_schema_retry:
+                raise ValueError(f"Failed to parse fact extraction response as JSON: {e}")
+
+            # One re-ask in enforced-JSON mode before giving up. If the first
+            # attempt ran out of output budget, raise the cap for the retry.
+            retry_cap = 24000 if finish_reason == "length" else 16000
+            logger.warning(
+                f"[STAGE:1:RETRY] Re-asking with response_format=json_object | "
+                f"finish_reason={finish_reason} max_output_tokens={retry_cap}"
+            )
+            retry_dict = await asyncio.to_thread(
+                self.client.create_response,
+                model=model,
+                instructions=(
+                    f"You are a precise legal fact extractor for {jurisdiction} law. "
+                    "Return only a valid JSON object."
+                ),
+                input=prompt,
+                max_output_tokens=retry_cap,
+                response_format={"type": "json_object"},
+            )
+            retry_response = safe_str_required(retry_dict.get("content"), "")
+            if retry_response.startswith("```"):
+                retry_response = "\n".join(retry_response.split("\n")[1:-1])
+            try:
+                fact_data = json.loads(retry_response)
+                logger.info("[STAGE:1:RETRY] Strict-schema re-ask parsed successfully")
+            except json.JSONDecodeError as retry_err:
+                logger.error(f"[STAGE:1:RETRY] Re-ask also failed to parse: {retry_err}")
+                raise ValueError(f"Failed to parse fact extraction response as JSON: {e}") from retry_err
+
+        # Null source_document values become an explicit extraction caveat
+        # (surfaced to the reviewer) instead of only a log line — a fact the
+        # model couldn't attribute to a document is a provenance gap.
+        unsourced = []
         for category, items in [
             ("timeline", fact_data.get("timeline", [])),
             ("financial_data", fact_data.get("financial_data", [])),
         ]:
             for item in items:
                 if item.get("source_document") is None:
+                    desc = str(item.get("description", ""))[:80]
+                    unsourced.append(f"{category}: {desc}")
                     logger.warning(
                         f"[STAGE:1] Null source_document in {category} | "
-                        f"description={str(item.get('description', ''))[:80]} — coercing to 'Unknown'"
+                        f"description={desc} — coercing to 'Unknown'"
                     )
+        if unsourced:
+            note = (
+                f"PROVENANCE GAP: {len(unsourced)} extracted fact(s) could not be "
+                f"attributed to a source document: " + "; ".join(unsourced[:10])
+            )
+            existing_notes = fact_data.get("extraction_notes") or ""
+            fact_data["extraction_notes"] = f"{existing_notes}\n{note}".strip()
 
         return FactMatrix(
             parties=[Party(**p) for p in fact_data.get("parties", [])],
@@ -1792,17 +1837,27 @@ RULES:
         except json.JSONDecodeError as e:
             raise ValueError(f"JSON parse failed for batch {batch_idx+1}: {e}")
 
-        # Log null source_document values before Pydantic coerces them
+        # Null sources become an explicit extraction caveat (see single-shot path)
+        unsourced = []
         for category, items in [
             ("timeline", fact_data.get("timeline", [])),
             ("financial_data", fact_data.get("financial_data", [])),
         ]:
             for item in items:
                 if item.get("source_document") is None:
+                    desc = str(item.get("description", ""))[:80]
+                    unsourced.append(f"{category}: {desc}")
                     logger.warning(
                         f"[STAGE:1:BATCH:{batch_idx+1}] Null source_document in {category} | "
-                        f"description={str(item.get('description', ''))[:80]} — coercing to 'Unknown'"
+                        f"description={desc} — coercing to 'Unknown'"
                     )
+        if unsourced:
+            note = (
+                f"PROVENANCE GAP (batch {batch_idx+1}): {len(unsourced)} fact(s) without "
+                f"a source document: " + "; ".join(unsourced[:10])
+            )
+            existing_notes = fact_data.get("extraction_notes") or ""
+            fact_data["extraction_notes"] = f"{existing_notes}\n{note}".strip()
 
         return FactMatrix(
             parties=[Party(**p) for p in fact_data.get("parties", [])],

@@ -21,6 +21,18 @@ request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 user_id_var: ContextVar[str] = ContextVar("user_id", default="")
 session_id_var: ContextVar[str] = ContextVar("session_id", default="")
 
+# Job-scoped correlation (set by the worker at claim time) so a single
+# analysis can be traced across worker -> services -> results without
+# grepping by timestamp.
+job_id_var: ContextVar[str] = ContextVar("job_id", default="")
+case_id_var: ContextVar[str] = ContextVar("case_id", default="")
+
+
+def set_job_context(job_id: str = "", case_id: str = "") -> None:
+    """Bind job/case ids into the logging context (empty strings to clear)."""
+    job_id_var.set(job_id)
+    case_id_var.set(case_id)
+
 
 def resolve_environment() -> str:
     """Determine the runtime environment from platform-provided variables.
@@ -93,6 +105,8 @@ class StructuredLogger:
             "request_id": request_id_var.get(),
             "user_id": user_id_var.get(),
             "session_id": session_id_var.get(),
+            "job_id": job_id_var.get(),
+            "case_id": case_id_var.get(),
             "environment": resolve_environment(),
             "service": "legal-document-portal",
             "version": os.getenv("APP_VERSION", "1.0.0"),

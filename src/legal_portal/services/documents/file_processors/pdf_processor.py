@@ -1836,7 +1836,7 @@ async def process_pdf(
                     # with pre-OCR compression + size gate + chunked fallback
                     try:
                         from legal_portal.utils.ocr_service_client import (
-                            get_ocr_client, OCRServiceError, OCRConfigError,
+                            get_ocr_client, OCRConfigError,
                         )
                         from legal_portal.services.documents.file_compression_service import get_compression_service
                         ocr_client = get_ocr_client()

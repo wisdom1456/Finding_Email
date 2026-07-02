@@ -30,6 +30,7 @@ from legal_portal.services.integrations.clio_helpers import (
 )
 
 from legal_portal.utils.blacklist import is_name_blacklisted
+from legal_portal.utils.oauth_state import OAuthStateError, generate_oauth_state, verify_oauth_state
 from supabase import Client
 
 logger = logging.getLogger(__name__)
@@ -122,44 +123,63 @@ class ClioSyncResponse(BaseModel):
 # ===== OAuth Flow =====
 
 
+class ClioAuthorizeUrlResponse(BaseModel):
+    """Authorization URL for the Clio OAuth flow."""
+
+    url: str
+
+
+def _build_authorize_url(request: Request, user_id: str) -> str:
+    """Build the Clio authorization URL with a signed, expiring state."""
+    redirect_uri = get_clio_redirect_uri(request)
+    auth_service = ClioAuthService(redirect_uri=redirect_uri)
+    state = generate_oauth_state(user_id)
+    return auth_service.get_authorization_url(state=state)
+
+
+@router.post("/authorize-url", response_model=ClioAuthorizeUrlResponse)
+async def get_clio_authorize_url(
+    request: Request,
+    user=Depends(get_current_user),
+):
+    """Return the Clio authorization URL for the current user.
+
+    The frontend requests this with standard header auth and then navigates
+    to the returned URL, keeping the session token out of query strings.
+    """
+    try:
+        return ClioAuthorizeUrlResponse(url=_build_authorize_url(request, user["id"]))
+    except Exception as e:
+        logger.exception("Failed to build Clio authorization URL")
+        raise HTTPException(status_code=500, detail="Failed to initiate OAuth") from e
+
+
 @router.get("/authorize")
 async def authorize_clio(
     request: Request,
     token: str = Query(..., description="User session token"),
     supabase: Client = Depends(get_supabase_client),
 ):
-    """Initiate Clio OAuth flow.
+    """Initiate Clio OAuth flow (deprecated).
 
-    Redirects user to Clio's authorization page.
-    Note: Uses query param for auth since this is a direct browser navigation.
+    DEPRECATED: passes the session token in the query string, where it lands
+    in access logs and browser history. Use POST /clio/authorize-url instead.
+    Kept for one release for in-flight clients.
     """
+    logger.warning("Deprecated GET /clio/authorize used; migrate to POST /clio/authorize-url")
     try:
         # Verify the token and get user
         response = supabase.auth.get_user(token)
         if not response or not response.user:
             raise HTTPException(status_code=401, detail="Invalid authentication token")
 
-        user_id = response.user.id
-
-        # Get consistent redirect URI
-        redirect_uri = get_clio_redirect_uri(request)
-
-        # Initialize auth service with the redirect URI
-        auth_service = ClioAuthService(redirect_uri=redirect_uri)
-
-        # Generate state with user_id for verification
-        state = f"user:{user_id}"
-
-        # Get authorization URL
-        auth_url = auth_service.get_authorization_url(state=state)
-
-        # Redirect to Clio
-        return RedirectResponse(url=auth_url)
+        return RedirectResponse(url=_build_authorize_url(request, response.user.id))
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initiate OAuth: {str(e)}") from e
+        logger.exception("Failed to initiate Clio OAuth")
+        raise HTTPException(status_code=500, detail="Failed to initiate OAuth") from e
 
 
 @router.get("/callback")
@@ -174,11 +194,14 @@ async def clio_callback(
     Exchanges code for access token and stores in database.
     """
     try:
-        # Extract user_id from state
-        if not state.startswith("user:"):
-            raise HTTPException(status_code=400, detail="Invalid state parameter")
-
-        user_id = state.split("user:")[1]
+        # Verify the signed state and extract the bound user_id. Unsigned
+        # "user:<id>" states from the old scheme are intentionally rejected —
+        # accepting them would reopen the OAuth-CSRF hole.
+        try:
+            user_id = verify_oauth_state(state)
+        except OAuthStateError as e:
+            logger.warning("Clio OAuth callback received invalid state: %s", e)
+            raise HTTPException(status_code=400, detail="Invalid state parameter") from e
 
         # Get the same redirect URI used in /authorize
         # This is critical - Clio requires the redirect_uri to match exactly
@@ -205,7 +228,6 @@ async def clio_callback(
 
         # Determine frontend URL - use production URL for consistency
         import os
-        from urllib.parse import quote
 
         # Priority: CLIO_PRODUCTION_URL > FRONTEND_URL > fallback
         production_url = os.getenv("CLIO_PRODUCTION_URL")
@@ -219,9 +241,11 @@ async def clio_callback(
         return RedirectResponse(url=redirect_url)
 
     except Exception as e:
-        # Redirect to frontend with error
+        # Redirect to frontend with a generic error code; the exception detail
+        # stays in server logs (raw str(e) can leak internals into the URL).
         import os
-        from urllib.parse import quote
+
+        logger.exception("Clio OAuth callback failed")
 
         # Priority: CLIO_PRODUCTION_URL > FRONTEND_URL > fallback
         production_url = os.getenv("CLIO_PRODUCTION_URL")
@@ -230,8 +254,8 @@ async def clio_callback(
         else:
             frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173")
 
-        error_message = quote(str(e))
-        redirect_url = f"{frontend_url}/app/cases?clio_error={error_message}"
+        error_code = "invalid_state" if isinstance(e, HTTPException) and e.status_code == 400 else "oauth_failed"
+        redirect_url = f"{frontend_url}/app/cases?clio_error={error_code}"
         return RedirectResponse(url=redirect_url)
 
 
@@ -274,7 +298,8 @@ async def get_clio_status(
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}") from e
+        logger.exception("Failed to get status")
+        raise HTTPException(status_code=500, detail="Failed to get status") from e
 
 
 @router.delete("/disconnect")
@@ -289,7 +314,8 @@ async def disconnect_clio(
         return {"success": True, "message": "Clio integration disconnected"}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to disconnect: {str(e)}") from e
+        logger.exception("Failed to disconnect")
+        raise HTTPException(status_code=500, detail="Failed to disconnect") from e
 
 
 # ===== Matter Search =====
@@ -345,9 +371,11 @@ async def get_clio_client(
         return ClioClient(access_token)
 
     except ClioAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Clio authentication failed: {str(e)}") from e
+        logger.exception("Clio authentication failed")
+        raise HTTPException(status_code=401, detail="Clio authentication failed") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize Clio client: {str(e)}") from e
+        logger.exception("Failed to initialize Clio client")
+        raise HTTPException(status_code=500, detail="Failed to initialize Clio client") from e
 
 
 @router.get("/search-matters", response_model=List[ClioMatterResponse])
@@ -374,11 +402,14 @@ async def search_clio_matters(
         ]
 
     except ClioAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}") from e
+        logger.exception("Clio authentication error")
+        raise HTTPException(status_code=401, detail="Clio authentication error") from e
     except ClioAPIError as e:
-        raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}") from e
+        logger.exception("Clio API error")
+        raise HTTPException(status_code=500, detail="Clio API error") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}") from e
+        logger.exception("Search failed")
+        raise HTTPException(status_code=500, detail="Search failed") from e
 
 
 # ===== Data Import =====
@@ -844,7 +875,7 @@ async def import_clio_data(
             status="error",
             error=str(e),
         )
-        raise HTTPException(status_code=401, detail=f"Clio authentication error: {str(e)}") from e
+        raise HTTPException(status_code=401, detail="Clio authentication error") from e
     except ClioAPIError as e:
         await publish_and_persist(
             f"API error: {str(e)}",
@@ -853,7 +884,7 @@ async def import_clio_data(
             status="error",
             error=str(e),
         )
-        raise HTTPException(status_code=500, detail=f"Clio API error: {str(e)}") from e
+        raise HTTPException(status_code=500, detail="Clio API error") from e
     except Exception as e:
         await publish_and_persist(
             f"Import failed: {str(e)}",
@@ -862,7 +893,7 @@ async def import_clio_data(
             status="error",
             error=str(e),
         )
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}") from e
+        raise HTTPException(status_code=500, detail="Import failed") from e
 
 
 @router.delete("/unlink/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -927,7 +958,8 @@ async def unlink_clio_matter(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to unlink Clio matter: {str(e)}") from e
+        logger.exception("Failed to unlink Clio matter")
+        raise HTTPException(status_code=500, detail="Failed to unlink Clio matter") from e
 
 
 @router.post("/sync/{case_id}", response_model=ClioSyncResponse)
@@ -1260,5 +1292,5 @@ async def sync_clio_matter(
         })
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to sync Clio matter: {str(e)}"
+            detail="Failed to sync Clio matter"
         )

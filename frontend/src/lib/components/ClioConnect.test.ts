@@ -2,7 +2,7 @@
  * Tests for ClioConnect component button interactions
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import ClioConnect from './ClioConnect.svelte';
 
 // Mock stores
@@ -63,12 +63,17 @@ describe('ClioConnect', () => {
 		expect(connectButton).toHaveClass('btn-primary');
 	});
 
-	it('connect button redirects to OAuth flow', async () => {
-		// Mock API response
-		(global.fetch as any).mockResolvedValueOnce({
-			ok: true,
-			json: async () => ({ connected: false })
-		});
+	it('connect button fetches authorize URL with header auth and navigates', async () => {
+		// Mock API responses: status check, then authorize-url
+		(global.fetch as any)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ connected: false })
+			})
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ url: 'https://app.clio.com/oauth/authorize?state=signed' })
+			});
 
 		// Mock window.location
 		const originalLocation = window.location;
@@ -81,8 +86,18 @@ describe('ClioConnect', () => {
 		const connectButton = screen.getByRole('button', { name: /connect to clio/i });
 		await fireEvent.click(connectButton);
 
-		expect(window.location.href).toContain('/api/clio/authorize');
-		expect(window.location.href).toContain('token=mock-token');
+		// Authorization URL is fetched via POST with the bearer header —
+		// the session token must never appear in the navigated URL.
+		await waitFor(() => {
+			expect(window.location.href).toBe('https://app.clio.com/oauth/authorize?state=signed');
+		});
+		const authorizeCall = (global.fetch as any).mock.calls.find(([url]: [string]) =>
+			url.includes('/api/clio/authorize-url')
+		);
+		expect(authorizeCall).toBeTruthy();
+		expect(authorizeCall[1].method).toBe('POST');
+		expect(authorizeCall[1].headers.Authorization).toBe('Bearer mock-token');
+		expect(window.location.href).not.toContain('token=mock-token');
 
 		// Restore
 		(window as any).location = originalLocation;

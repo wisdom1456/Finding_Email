@@ -3,6 +3,7 @@
 	import { supabase } from '$lib/supabase';
 	import { withRetry } from '$lib/utils/supabaseRetry';
 	import Badge from '$lib/components/ui/Badge.svelte';
+	import SkeletonList from '$lib/components/ui/SkeletonList.svelte';
 	import { FileText, Clock, CheckCircle, Plus } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
@@ -130,13 +131,15 @@
 		</div>
 
 		{#if loading}
-			<div class="p-8 text-center">
-				<div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-accent border-t-transparent"></div>
-				<p class="mt-3 text-sm text-gray-500">Loading cases...</p>
+			<div class="p-4">
+				<SkeletonList count={4} />
 			</div>
 		{:else if errorMessage}
 			<div class="p-8 text-center">
 				<p class="text-sm text-red-600">{errorMessage}</p>
+				<button class="mt-4 btn btn-secondary px-6" onclick={() => loadCases()}>
+					Try again
+				</button>
 			</div>
 		{:else if cases.length === 0}
 			<div class="p-8 text-center">

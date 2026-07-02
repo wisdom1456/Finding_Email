@@ -261,3 +261,31 @@ class TestStrictSchemaRetryIntegration:
         with pytest.raises(ValueError):
             await analyzer._extract_fact_matrix("intake", [self._doc()], "Florida")
         assert client.create_response.call_count == 2
+
+
+class TestCorpusLoadsFromDefaultPath:
+    """Regression: the corpus must load via default path resolution.
+
+    A fixed parents[N] index once resolved to src/ instead of the repo root,
+    so zero statutes loaded and EVERY citation validated as unverified —
+    silently disabling the anti-hallucination corpus in all environments.
+    """
+
+    def test_florida_corpus_loads(self):
+        from legal_portal.services.shared.statute_validation_service import (
+            StatuteValidationService,
+        )
+
+        v = StatuteValidationService(jurisdiction="Florida")
+        assert len(v.statutes) > 0, "Florida corpus failed to load from default path"
+        assert v._validate_citation("Section 83.56(3)").is_verified
+        assert v._validate_citation("Fla. Stat. § 501.204").is_verified
+        assert not v._validate_citation("Fla. Stat. § 999.9999").is_verified
+
+    def test_new_mexico_corpus_loads(self):
+        from legal_portal.services.shared.statute_validation_service import (
+            StatuteValidationService,
+        )
+
+        v = StatuteValidationService(jurisdiction="New Mexico")
+        assert len(v.statutes) > 0, "New Mexico corpus failed to load from default path"

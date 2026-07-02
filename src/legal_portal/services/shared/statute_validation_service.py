@@ -142,9 +142,22 @@ class StatuteValidationService:
             raise ValueError(f"Unsupported jurisdiction: {jurisdiction}")
 
         if corpus_dir is None:
-            # Default to project corpus directory based on jurisdiction
-            project_root = Path(__file__).parents[3]
-            corpus_dir = project_root / self.config["corpus_path"]
+            # Walk upward from this file until the corpus directory is found.
+            # (A fixed parents[N] index silently broke here: from
+            # services/shared/ parents[3] is src/, not the repo root, so the
+            # corpus never loaded and every citation validated as unverified.)
+            for parent in Path(__file__).resolve().parents:
+                candidate = parent / self.config["corpus_path"]
+                if candidate.is_dir():
+                    corpus_dir = candidate
+                    break
+            else:
+                corpus_dir = Path(__file__).resolve().parents[3] / self.config["corpus_path"]
+                logger.error(
+                    f"Corpus directory '{self.config['corpus_path']}' not found in any "
+                    f"ancestor of {Path(__file__).resolve()} — citation validation will "
+                    f"treat every citation as unverified"
+                )
 
         self.corpus_dir = Path(corpus_dir)
         self.statutes: Dict[str, Dict] = {}

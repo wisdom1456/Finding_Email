@@ -46,6 +46,31 @@ comment. Baseline before repair was 4 vitest failures; 1 was fixed (the
   how Python `mypy` and ruff-style are already treated. Burn these to zero, then
   re-block — same pattern as the ruff style backlog.
 
+## CI environment notes (not test debt)
+
+The Test Suite workflow was fully repaired 2026-07-02 (first all-green run:
+Actions run 28627988199). Beyond the quarantines above, these were CI
+infrastructure fixes, not product/test issues:
+
+- **Mock credentials must be validation-passing.** `OPENAI_API_KEY` must start
+  with `sk-`/`sk-proj-` or the app's Settings validator aborts import (suite-wide
+  collection errors). CI uses `sk-proj-ci-placeholder…`. `CI_MOCK_SERVICES=true`
+  makes live-service tests skip.
+- **Frontend build** needs `PUBLIC_API_URL` / `PUBLIC_SUPABASE_URL` /
+  `PUBLIC_SUPABASE_ANON_KEY` at build time (static `$env/public` imports).
+- **`requirements-dev.txt` doesn't include runtime deps** — CI jobs install both
+  `requirements.txt` and `requirements-dev.txt`. (`numpy` was also undeclared and
+  is now in `requirements.txt`.)
+- **Integration (local Supabase):** install the CLI via `supabase/setup-cli@v1`
+  (curl|sh landed off-PATH); extract the running instance's real JWTs (a fresh
+  CLI signs with a different secret than hardcoded demo keys); and after
+  `supabase db reset`, restore standard API-role grants (a fresh reset omits them
+  on migration-created tables) while re-asserting the profiles hardening. If
+  migration `20260702000000`'s profiles column lists change, update the grant
+  step in `.github/workflows/test.yml` to match.
+- **E2E** runs only when `TEST_USER_EMAIL`/`TEST_USER_PASSWORD` secrets exist;
+  otherwise it skips green (non-blocking).
+
 ## How to un-quarantine
 
 1. Run the test locally with a real `.env`: `venv/bin/pytest <path>::<test> -v`.

@@ -2,6 +2,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { env } from '$env/dynamic/public';
 	import { supabase, getSecureSession } from '$lib/supabase';
 	import { withRetry } from '$lib/utils/supabaseRetry';
 	import { getApiUrl } from '$lib/config';
@@ -35,6 +36,7 @@
 	import { isCaseSummary, isIntakeForm, isPrimaryIntakeCandidate, isVideoAudioFile } from '$lib/utils/documentClassification';
 	import { requiresSignatureReview, getDocumentSignatureDetection, getDocumentSignatureVerificationStatus, getDocumentSignatureStatus, getDocumentSignatureLabel, getDocumentSignatureBadgeClass, shouldShowSignatureBadge } from '$lib/utils/signatureDetection';
 	import { formatDate, formatFileSize, getStatusColor } from '$lib/utils/formatters';
+	import { shouldAutoExtract } from '$lib/utils/autoExtract';
 
 	let caseData = $state<CaseData | null>(null);
 	let documents = $state<any[]>([]);
@@ -73,6 +75,9 @@
 
 	// Dedup state
 	let dedupLoading = $state(false);
+
+	// Auto-extract state — latches so the auto-run fires at most once per page load
+	let autoExtractRan = $state(false);
 
 	// Documents that are ready but missing extracted text (will be skipped in analysis)
 	let docsWithoutText = $derived(
@@ -245,6 +250,21 @@
 			&& currentJobId) {
 			currentAnalysisId = analysisStatus.id;
 			showProgressModal = true;
+		}
+		// Auto-extract missing document text — gated behind PUBLIC_ENABLE_AUTO_EXTRACT.
+		// The bulk-extract endpoint server-side filters to docs missing text, so this
+		// is safe and non-redundant even if documents are already extracted.
+		if (
+			shouldAutoExtract(documents, {
+				flagEnabled: env.PUBLIC_ENABLE_AUTO_EXTRACT === 'true',
+				analysisInProgress:
+					analyzing || ['pending', 'processing'].includes(analysisStatus?.status ?? ''),
+				importInProgress: syncLoading,
+				alreadyRanThisLoad: autoExtractRan,
+			})
+		) {
+			autoExtractRan = true;
+			runOcrOnMissingDocs(); // existing function, shows its existing progress UI
 		}
 	});
 

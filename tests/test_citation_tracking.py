@@ -105,11 +105,11 @@ def test_text_normalization_legal_terms():
 @pytest.mark.asyncio
 async def test_semantic_similarity():
     """Test semantic similarity calculation."""
-    import os
+    from tests.support import real_openai_available
 
-    # Skip if no API key (embeddings require OpenAI)
-    if not os.getenv("OPENAI_API_KEY"):
-        pytest.skip("OPENAI_API_KEY not set - skipping embedding test")
+    # Requires real OpenAI embeddings; skip under mock/CI credentials.
+    if not real_openai_available():
+        pytest.skip("Real OpenAI embeddings required - skipping under mock/CI services")
 
     tracker = CitationTrackingService()
 
@@ -157,7 +157,7 @@ def test_corpus_validated_citation_boost():
 
 def test_match_score_with_semantic():
     """Test match score calculation with semantic similarity."""
-    import os
+    from tests.support import real_openai_available
 
     tracker = CitationTrackingService()
 
@@ -169,8 +169,9 @@ def test_match_score_with_semantic():
         "relevance_to_case": "Primary contractual agreement",
     }
 
-    # If no API key, semantic similarity will be 0, so fallback to word-based only
-    if not os.getenv("OPENAI_API_KEY"):
+    # Without real embeddings, semantic similarity is unavailable; fall back
+    # to word-based scoring so the test is meaningful under mock/CI services.
+    if not real_openai_available():
         score = tracker._calculate_match_score(statement, document, use_semantic=False)
         # Word-based score only
         assert score > 0.1

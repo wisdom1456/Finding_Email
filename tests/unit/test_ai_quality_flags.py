@@ -2,10 +2,15 @@
 
 Every feature must be a byte-identical passthrough with its flag OFF
 (the default), and produce the documented artifacts with it ON.
+
+These also serve as the automated verification of the four flags at their
+real integration points (prompt builders, letter HTML conversion, the
+fact-extraction retry path) without paid LLM calls.
 """
 
 from unittest.mock import MagicMock
 
+import pytest
 
 from legal_portal.config.default import settings
 from legal_portal.utils.prompt_hardening import (
@@ -130,3 +135,129 @@ class TestCitationAnnotation:
 
         html = f"cited{StatuteValidationService.UNVERIFIED_MARKER}"
         assert sanitize_letter_html(html) == html
+
+
+class TestPromptHardeningIntegration:
+    """Drive the real streaming-prompt builder end to end (no LLM)."""
+
+    def _analyzer(self):
+        from legal_portal.services.analysis.multi_stage_analyzer import MultiStageAnalyzer
+
+        return MultiStageAnalyzer.__new__(MultiStageAnalyzer)
+
+    def test_flag_off_prompt_has_no_fences(self, monkeypatch):
+        monkeypatch.setattr(settings, "enable_prompt_hardening", False)
+        prompt = self._analyzer()._build_streaming_prompt(
+            "CLIENT INTAKE BODY", "CASE DOC CONTEXT BODY", "Florida"
+        )
+        assert FENCE not in prompt
+        assert "CLIENT INTAKE BODY" in prompt
+        assert "CASE DOC CONTEXT BODY" in prompt
+
+    def test_flag_on_prompt_fences_content_without_loss(self, monkeypatch):
+        monkeypatch.setattr(settings, "enable_prompt_hardening", True)
+        prompt = self._analyzer()._build_streaming_prompt(
+            "CLIENT INTAKE BODY", "CASE DOC CONTEXT BODY", "Florida"
+        )
+        assert FENCE in prompt
+        assert "never" in prompt.lower()  # instruction-hierarchy clause present
+        # Content must survive the fencing untouched
+        assert "CLIENT INTAKE BODY" in prompt
+        assert "CASE DOC CONTEXT BODY" in prompt
+
+
+class TestCitationAnnotationIntegration:
+    """Drive the real letter HTML conversion chokepoint (no LLM)."""
+
+    def _svc(self):
+        from legal_portal.services.shared.json_processing_service import JsonProcessingService
+
+        return JsonProcessingService.__new__(JsonProcessingService)
+
+    # A well-formed citation that cannot exist in the FL corpus.
+    FAKE = "Fla. Stat. § 999.9999"
+
+    def test_flag_off_no_marker_or_banner(self, monkeypatch):
+        monkeypatch.setattr(settings, "enable_citation_annotations", False)
+        md = f"Your claim arises under {self.FAKE}, which applies here."
+        html = self._svc()._convert_markdown_to_html(md, jurisdiction="Florida")
+        assert "[unverified]" not in html
+        assert "could not be verified" not in html
+
+    def test_flag_on_marks_unverified_and_adds_banner(self, monkeypatch):
+        monkeypatch.setattr(settings, "enable_citation_annotations", True)
+        md = f"Your claim arises under {self.FAKE}, which applies here."
+        html = self._svc()._convert_markdown_to_html(md, jurisdiction="Florida")
+        assert "citation-unverified" in html  # inline <sup> marker
+        assert "could not be verified" in html  # warning banner
+        # The banner must survive the nh3 sanitizer applied downstream
+        assert "citation-warning-banner" in html
+
+    def test_flag_on_no_citations_no_banner(self, monkeypatch):
+        monkeypatch.setattr(settings, "enable_citation_annotations", True)
+        html = self._svc()._convert_markdown_to_html(
+            "This letter contains no statutory citations.", jurisdiction="Florida"
+        )
+        assert "could not be verified" not in html
+
+
+class TestStrictSchemaRetryIntegration:
+    """Drive the real fact-extraction retry path with a mock client."""
+
+    def _analyzer_with_responses(self, responses):
+        from legal_portal.services.analysis.multi_stage_analyzer import MultiStageAnalyzer
+
+        analyzer = MultiStageAnalyzer.__new__(MultiStageAnalyzer)
+        client = MagicMock()
+        client.get_preferred_model.return_value = "gpt-5.4-mini"
+        client.create_response.side_effect = responses
+        analyzer.client = client
+        return analyzer, client
+
+    def _doc(self):
+        doc = MagicMock()
+        doc.model_dump.return_value = {
+            "document_name": "lease.pdf",
+            "document_type": "Contract",
+            "key_content": "Residential lease between tenant and landlord.",
+            "important_details": [],
+            "parties": [],
+            "key_dates": [],
+            "key_amounts": [],
+        }
+        return doc
+
+    _BAD = {"success": True, "finish_reason": "stop", "content": "not valid json {{{", "usage": {}}
+    _GOOD = {
+        "success": True,
+        "finish_reason": "stop",
+        "content": '{"parties":[],"timeline":[],"financial_data":[],"key_documents":[],"preliminary_issues":[]}',
+        "usage": {},
+    }
+
+    @pytest.mark.asyncio
+    async def test_flag_off_raises_on_parse_failure(self, monkeypatch):
+        monkeypatch.setattr(settings, "enable_strict_schema_retry", False)
+        analyzer, client = self._analyzer_with_responses([self._BAD])
+        with pytest.raises(ValueError, match="parse fact extraction"):
+            await analyzer._extract_fact_matrix("intake", [self._doc()], "Florida")
+        assert client.create_response.call_count == 1  # no retry
+
+    @pytest.mark.asyncio
+    async def test_flag_on_reasks_and_recovers(self, monkeypatch):
+        monkeypatch.setattr(settings, "enable_strict_schema_retry", True)
+        analyzer, client = self._analyzer_with_responses([self._BAD, self._GOOD])
+        result = await analyzer._extract_fact_matrix("intake", [self._doc()], "Florida")
+        assert result is not None
+        assert client.create_response.call_count == 2  # initial + one re-ask
+        # The re-ask must request enforced JSON
+        retry_kwargs = client.create_response.call_args_list[1].kwargs
+        assert retry_kwargs.get("response_format") == {"type": "json_object"}
+
+    @pytest.mark.asyncio
+    async def test_flag_on_still_raises_if_retry_also_fails(self, monkeypatch):
+        monkeypatch.setattr(settings, "enable_strict_schema_retry", True)
+        analyzer, client = self._analyzer_with_responses([self._BAD, self._BAD])
+        with pytest.raises(ValueError):
+            await analyzer._extract_fact_matrix("intake", [self._doc()], "Florida")
+        assert client.create_response.call_count == 2

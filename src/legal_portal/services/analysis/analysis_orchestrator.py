@@ -125,6 +125,22 @@ def apply_intake_selection(
     return chosen_path, new_file_paths
 
 
+def reorder_intake_by_selection(processed_intake: List[Any], chosen_doc_id: str) -> List[Any]:
+    """Pure reorder for the live pipeline (`process_case_background`).
+
+    Returns a new list with the ProcessedDocument whose `.document_id`
+    matches `chosen_doc_id` moved to index 0 (downstream,
+    `main_processor` anchors the analysis on `processed_intake[0]`).
+    The relative order of the remaining docs is preserved and list
+    membership never changes. Unknown id → the same order, as a new list.
+    Does not mutate the input list.
+    """
+    winner = next((p for p in processed_intake if p.document_id == chosen_doc_id), None)
+    if winner is None:
+        return list(processed_intake)
+    return [winner] + [p for p in processed_intake if p is not winner]
+
+
 async def _extract_deferred_documents(
     deferred_docs: list,
     supabase,
@@ -1089,6 +1105,72 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 processed_intake[0].document_type = DocumentType.INTAKE_FORM
             else:
                 raise ValueError("No documents with text found for analysis. Please run OCR first.")
+
+        # AI intake selection (Task C2, live pipeline): downstream,
+        # main_processor anchors the analysis on processed_intake[0], so
+        # list ORDER decides which intake doc wins. When flagged on and
+        # multiple intake docs exist, ask the LLM which is the most
+        # detailed and move it to index 0 (membership unchanged).
+        # Entirely flag-gated and never allowed to raise out of here —
+        # any failure keeps today's order.
+        if get_settings().enable_ai_intake_selection and len(processed_intake) > 1:
+            try:
+                from legal_portal.services.analysis.intake_selection_service import (
+                    select_intake_document,
+                )
+
+                candidates = [
+                    {
+                        "id": p.document_id,
+                        "file_name": p.file_name,
+                        "file_type": "application/pdf",
+                    }
+                    for p in processed_intake
+                ]
+                selection = select_intake_document(candidates, supabase, OpenAIClient())
+                if selection:
+                    processed_intake = reorder_intake_by_selection(
+                        processed_intake, selection.chosen_doc_id
+                    )
+                    chosen_name = processed_intake[0].file_name
+                    logger.info(
+                        f"[INTAKE-SELECT] Chose '{chosen_name}' among {len(processed_intake)} "
+                        f"candidates: {selection.reasoning}"
+                    )
+                    await progress_manager.publish_progress(
+                        channel_id=analysis_id,
+                        message=f"Selected intake document: {chosen_name} (best of {len(processed_intake)} candidates)",
+                        phase="preparing",
+                        percent=5,
+                        timestamp=datetime.utcnow().isoformat(),
+                    )
+                    # Persist for display; a DB hiccup here must not fail the analysis.
+                    try:
+                        chosen_row = next(
+                            (d for d in documents if d.get("id") == selection.chosen_doc_id),
+                            None,
+                        )
+                        existing_metadata = (chosen_row or {}).get("metadata") or {}
+                        supabase.table("documents").update(
+                            {
+                                "metadata": {
+                                    **existing_metadata,
+                                    "intake_selection": {
+                                        "selected": True,
+                                        "reasoning": selection.reasoning,
+                                        "candidates": len(processed_intake),
+                                    },
+                                }
+                            }
+                        ).eq("id", selection.chosen_doc_id).execute()
+                    except Exception as e:
+                        logger.warning(
+                            f"[INTAKE-SELECT] Failed to persist selection metadata: {e}"
+                        )
+            except Exception as e:
+                logger.warning(
+                    f"[INTAKE-SELECT] AI intake selection failed, keeping mechanical order: {e}"
+                )
 
         # Cooperative cancellation checkpoint after preparing documents.
         if _analysis_is_cancelled(supabase, analysis_id):

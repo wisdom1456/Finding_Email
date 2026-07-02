@@ -9,9 +9,12 @@ chosen intake path, the leftover file_paths, the collected candidates, and an
 optional AI selection result, it returns the (possibly updated) intake path
 and file_paths — without touching global state or the mechanical loop.
 """
+from types import SimpleNamespace
+
 from legal_portal.services.analysis.analysis_orchestrator import (
     apply_intake_selection,
     is_intake_candidate,
+    reorder_intake_by_selection,
 )
 from legal_portal.services.analysis.intake_selection_service import IntakeSelection
 
@@ -121,3 +124,40 @@ def test_apply_intake_selection_does_not_mutate_inputs():
     apply_intake_selection("/tmp/a.pdf", original_file_paths, candidates, selection)
 
     assert original_file_paths == ["/tmp/other.pdf"]
+
+
+# ---------------------------------------------------------------------------
+# reorder_intake_by_selection (live pipeline: process_case_background)
+# ---------------------------------------------------------------------------
+
+
+def _pdoc(doc_id: str) -> SimpleNamespace:
+    # Stand-in for ProcessedDocument: only .document_id is consulted.
+    return SimpleNamespace(document_id=doc_id)
+
+
+def test_reorder_moves_winner_to_front_preserving_rest_order():
+    a, b, c = _pdoc("a"), _pdoc("b"), _pdoc("c")
+    result = reorder_intake_by_selection([a, b, c], "b")
+    assert result == [b, a, c]
+    # membership unchanged — nothing dropped or added
+    assert set(id(p) for p in result) == {id(a), id(b), id(c)}
+
+
+def test_reorder_winner_already_front_is_unchanged():
+    a, b = _pdoc("a"), _pdoc("b")
+    result = reorder_intake_by_selection([a, b], "a")
+    assert result == [a, b]
+
+
+def test_reorder_unknown_id_is_unchanged():
+    a, b = _pdoc("a"), _pdoc("b")
+    result = reorder_intake_by_selection([a, b], "nope")
+    assert result == [a, b]
+
+
+def test_reorder_does_not_mutate_input_list():
+    a, b = _pdoc("a"), _pdoc("b")
+    original = [a, b]
+    reorder_intake_by_selection(original, "b")
+    assert original == [a, b]

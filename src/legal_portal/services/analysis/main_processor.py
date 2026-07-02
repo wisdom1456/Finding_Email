@@ -615,6 +615,9 @@ async def process_case_documents(
             diag_logger.log_stage("stage1_raw_text", {"case_docs": raw_docs, "intake_docs": raw_intake})
 
         openai_client_wrapper = OpenAIClient()
+        # No-op unless ENABLE_DETERMINISTIC_SEED is set: pins a per-case seed
+        # on every completion call so re-analysis of the same case drifts less.
+        openai_client_wrapper.set_case_seed(case_id if case_id != "unknown" else "")
         json_processing_service = JsonProcessingService(
             client=openai_client_wrapper,
             config={"openai_max_tokens": settings.openai_max_tokens},

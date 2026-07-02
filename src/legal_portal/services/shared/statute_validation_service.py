@@ -244,6 +244,39 @@ class StatuteValidationService:
 
         return result
 
+    UNVERIFIED_MARKER = ' <sup class="citation-unverified">[unverified]</sup>'
+
+    def annotate_unverified_citations(self, letter_markdown: str) -> tuple[str, "ValidationResult"]:
+        """Mark every unverified/suspicious statute citation inline.
+
+        Appends a visible superscript marker after each citation that failed
+        corpus verification, so the reviewing attorney sees the risk in the
+        letter itself rather than in a warnings array. Returns the annotated
+        markdown and the validation result.
+        """
+        result = self.validate_letter(letter_markdown)
+
+        annotated = letter_markdown
+        flagged_texts = {ref.original_text for ref in [*result.unverified, *result.suspicious]}
+        # Drop any flagged text that is a substring of a longer flagged text —
+        # annotating both would insert a marker inside the longer citation.
+        flagged = sorted(
+            (t for t in flagged_texts if t and not any(t != o and t in o for o in flagged_texts)),
+            key=len,
+            reverse=True,
+        )
+        for text in flagged:
+            if text in annotated:
+                annotated = annotated.replace(text + self.UNVERIFIED_MARKER, text)  # idempotence guard
+                annotated = annotated.replace(text, text + self.UNVERIFIED_MARKER)
+
+        if flagged_texts:
+            logger.warning(
+                f"Annotated {len(flagged_texts)} unverified/suspicious citation(s) "
+                f"in letter for {self.jurisdiction}"
+            )
+        return annotated, result
+
     def _extract_citations(self, text: str) -> Set[str]:
         """Extract all statute and rule citations from text for the current jurisdiction."""
         citations = set()

@@ -202,6 +202,36 @@ class Settings(BaseSettings):
     )
 
     # ==================================================
+    # AI QUALITY FEATURE FLAGS (phased rollout)
+    # All default OFF; enable per environment after verifying on a
+    # snapshot case. Rollback = flip the env var, no deploy needed.
+    # ==================================================
+
+    enable_prompt_hardening: bool = Field(
+        False,
+        alias="ENABLE_PROMPT_HARDENING",
+        description="Wrap document content in data fences with an instruction-hierarchy clause (prompt-injection mitigation)",
+    )
+
+    enable_deterministic_seed: bool = Field(
+        False,
+        alias="ENABLE_DETERMINISTIC_SEED",
+        description="Pass a per-case seed on completion calls to reduce run-to-run output drift",
+    )
+
+    enable_strict_schema_retry: bool = Field(
+        False,
+        alias="ENABLE_STRICT_SCHEMA_RETRY",
+        description="On fact-extraction JSON parse failure, re-ask once with strict json_schema response format before raising",
+    )
+
+    enable_citation_annotations: bool = Field(
+        False,
+        alias="ENABLE_CITATION_ANNOTATIONS",
+        description="Mark statute citations that fail corpus verification with an inline letter marker and surface a count for the review UI",
+    )
+
+    # ==================================================
     # LETTER GENERATION FEATURE FLAGS
     # ==================================================
 

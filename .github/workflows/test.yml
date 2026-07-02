@@ -346,6 +346,14 @@ jobs:
       - name: Run integration tests
         env:
           PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/src
+          # App Settings validation runs at import even for integration tests;
+          # provide the same placeholder credentials as the backend job. The
+          # tests themselves connect to local Supabase via SUPABASE_TEST_*.
+          CI_MOCK_SERVICES: 'true'
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://example.supabase.co' }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY || 'sk-ci-placeholder' }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY || 'sk-ci-placeholder' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-proj-ci-placeholder0000000000000000000000' }}
         run: |
           pytest tests/integration/ -m integration -v
 

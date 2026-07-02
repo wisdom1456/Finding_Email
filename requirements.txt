@@ -23,6 +23,9 @@ PyMuPDF>=1.23.0
 Pillow>=10.0.0
 pillow-heif>=0.16.0
 PyPDF2>=3.0.0
+# numpy is imported directly by citation_tracking_service and image utils;
+# it was previously only present transitively, so a clean install lacked it.
+numpy>=1.26,<3
 
 # Document Output (REQUIRED for analysis results)
 html2text>=2020.1.16

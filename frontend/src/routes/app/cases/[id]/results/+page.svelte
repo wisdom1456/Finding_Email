@@ -376,7 +376,7 @@
 
 			results = res;
 
-			// Auto-run if: multi-stage supported, no gap analysis yet, and explicitly enabled
+			// Auto-run if multi-stage supported AND (explicitly requested OR no gap analysis exists yet)
 			if (shouldAutoRunGapAnalysis({ hasMultiStageSupport, hasGapAnalysis: Boolean(gapAnalysis), autoRunEnabled: autoRunGapAnalysis })) {
 				analyzeGaps();
 			}

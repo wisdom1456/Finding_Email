@@ -237,7 +237,7 @@ class TestSynthesisGate:
                  "error": "Batch timed out", "error_type": "TIMEOUT"}
             ],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "awaiting_recovery"
         mgr.update_phase.assert_any_call("awaiting_recovery")
         # mark_documents_skipped should NOT be called (no soft failures)
@@ -253,7 +253,7 @@ class TestSynthesisGate:
                  "error": "OpenAI 500", "error_type": "PROCESSING_ERROR"}
             ],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "awaiting_recovery"
 
     # --- Path 6c: hard failure TASK_ERROR must block ---
@@ -266,7 +266,7 @@ class TestSynthesisGate:
                  "error": "gather exception", "error_type": "TASK_ERROR"}
             ],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "awaiting_recovery"
 
     # --- Path 6d: MISSING_SUMMARY alone must NOT block ---
@@ -279,7 +279,7 @@ class TestSynthesisGate:
                  "error": "Model did not return summary", "error_type": "MISSING_SUMMARY"}
             ],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "proceed"
         # Verify it was auto-skipped
         mgr.mark_documents_skipped.assert_called_once_with(["doc_miss"])
@@ -297,7 +297,7 @@ class TestSynthesisGate:
                  "error": "Timed out", "error_type": "TIMEOUT"},
             ],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "awaiting_recovery"
         # Soft failure should still be auto-skipped before blocking
         mgr.mark_documents_skipped.assert_called_once_with(["doc_miss"])
@@ -309,7 +309,7 @@ class TestSynthesisGate:
             doc_summary={"pending": 2, "processing": 0, "completed": 8, "failed": 0, "skipped": 0},
             failed_docs=[],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "awaiting_recovery"
 
     # --- Path 7b: processing docs must block ---
@@ -319,7 +319,7 @@ class TestSynthesisGate:
             doc_summary={"pending": 0, "processing": 1, "completed": 9, "failed": 0, "skipped": 0},
             failed_docs=[],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "awaiting_recovery"
 
     # --- Path 7c: all completed → gate passes ---
@@ -329,7 +329,7 @@ class TestSynthesisGate:
             doc_summary={"pending": 0, "processing": 0, "completed": 10, "failed": 0, "skipped": 0},
             failed_docs=[],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "proceed"
         mgr.update_phase.assert_called_with("synthesis")
 
@@ -340,7 +340,7 @@ class TestSynthesisGate:
             doc_summary={"pending": 0, "processing": 0, "completed": 8, "failed": 0, "skipped": 2},
             failed_docs=[],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "proceed"
 
     # --- Edge: MISSING_SUMMARY with no id should not crash ---
@@ -353,7 +353,7 @@ class TestSynthesisGate:
                  "error": "Model did not return summary", "error_type": "MISSING_SUMMARY"}
             ],
         )
-        outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+        outcome = asyncio.run(_run_gate(mgr))
         assert outcome == "proceed"
         # mark_documents_skipped called with empty list (id filtered out)
         mgr.mark_documents_skipped.assert_not_called()
@@ -386,6 +386,6 @@ class TestAutoSkipLogging:
                      "error": "Model did not return summary", "error_type": "MISSING_SUMMARY"},
                 ],
             )
-            outcome = asyncio.get_event_loop().run_until_complete(_run_gate(mgr))
+            outcome = asyncio.run(_run_gate(mgr))
             assert outcome == "proceed"
             mgr.mark_documents_skipped.assert_called_once_with(["id_a", "id_b"])

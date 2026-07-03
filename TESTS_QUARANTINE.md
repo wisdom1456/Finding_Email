@@ -78,8 +78,17 @@ fixed. No vitest tests remain quarantined.
   `PageLoad` type that includes `void`) and 2 redundant `!== 'error'` guards in
   `DemandLetterSection.svelte` that TS control-flow analysis proved dead (the
   error-setting path throws / the state is already narrowed).
-- **ruff style** backlog remains advisory (`continue-on-error`), same pattern as
-  Python `mypy`. Widen the blocking `--select` list as categories reach zero.
+- **ruff style** backlog remains largely advisory (`continue-on-error`). The
+  blocking `--select` was widened 2026-07-02 to add **B904** (raise ... from —
+  18 sites fixed for exception-chain clarity), **B007**, **E741**, **E701** (all
+  driven to zero). Next candidates to fix-then-block, in rough priority:
+  **F841** (22 unused vars — needs per-site judgment; some product cases like an
+  unused `case` in analysis_core may be latent dropped-check bugs worth a look),
+  then **F405** (star-import restructuring in `core/data_models.py`) and **E402**
+  (often-intentional import placement, e.g. `worker/analysis_worker.py`). The
+  cosmetic bulk (E501 line-length ~537, docstring D-rules ~600+, whitespace,
+  I001 import-sort) stays advisory — burning it down is a large mechanical diff,
+  not a correctness gate.
 
 ## CI environment notes (not test debt)
 

@@ -10,7 +10,8 @@ def extract_entities(text: str) -> Set[str]:
 
 def calculate_overlap(set1: Set[str], set2: Set[str]) -> float:
     """Calculate Jaccard similarity or simple overlap ratio."""
-    if not set1: return 0.0
+    if not set1:
+        return 0.0
     intersection = set1.intersection(set2)
     return len(intersection) / len(set1)
 

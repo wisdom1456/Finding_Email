@@ -46,7 +46,7 @@ async def _authenticate_from_token(token: str) -> dict:
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from None
 
 
 async def _authenticate_request(request: Request, token: str | None = None) -> dict:
@@ -70,7 +70,7 @@ async def _verify_analysis_ownership(supabase, analysis_id: str, user_id: str):
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized")
+        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized") from None
 
 
 async def poll_database_for_progress(
@@ -353,7 +353,7 @@ async def get_job_status(
             .execute()
         )
     except Exception:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail="Job not found") from None
 
     if not job_resp.data:
         raise HTTPException(status_code=404, detail="Job not found")

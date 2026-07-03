@@ -268,7 +268,7 @@ def validate_file_content(file_data: bytes, filename: str) -> Tuple[str, str]:
                     raise ValueError(
                         f"File content does not match expected format for '{ext}'. "
                         f"The file may be corrupted or disguised as a different type."
-                    )
+                    ) from None
         else:
             # For text-based formats (txt, csv, eml), use mimetypes.guess_type
             # These don't have reliable magic numbers

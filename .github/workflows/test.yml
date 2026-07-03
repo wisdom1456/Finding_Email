@@ -37,7 +37,9 @@ jobs:
       - name: Lint Python with ruff (correctness — blocking)
         run: |
           pip install ruff
-          ruff check src/ tests/ worker/ --select F401,F811,F821,F823,F702,E9
+          # B904 (raise ... from) added 2026-07-02 for exception-chain clarity;
+          # B007/E741/E701 were at/driven to zero the same day.
+          ruff check src/ tests/ worker/ --select F401,F811,F821,F823,F702,E9,B904,B007,E741,E701
 
       - name: Lint Python with ruff (style — advisory)
         run: |

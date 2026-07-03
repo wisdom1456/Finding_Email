@@ -1263,7 +1263,7 @@ async def save_streaming_analysis(
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to serialize analysis result: {retry_err}. Problematic fields: {problematic_fields}"
-                )
+                ) from retry_err
 
         # Create or update analysis result
         # Note: Gap analysis is now handled on-demand via POST /analyze-gaps endpoint
@@ -1383,7 +1383,7 @@ async def save_streaming_analysis(
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to save analysis result due to serialization error: {error_detail}"
-                )
+                ) from db_err
             raise
 
         # Update case status - must use valid status from constraint: pending, processing, completed, error, cancelled
@@ -1400,7 +1400,7 @@ async def save_streaming_analysis(
         raise
     except Exception as e:
         logger.error(f"Error saving streaming analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/stream/{case_id}")
@@ -1795,7 +1795,7 @@ async def stream_case_analysis(
         raise
     except Exception as e:
         logger.error(f"Error in stream_case_analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/stream/{case_id}/result")

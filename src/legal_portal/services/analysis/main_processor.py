@@ -1529,7 +1529,7 @@ async def process_case_documents(
 
             # --- Persist enriched registries back to DB ---
             if supabase_client:
-                for norm, reg in registry_by_name.items():
+                for _norm, reg in registry_by_name.items():
                     doc_id = reg.get("document_id")
                     if doc_id:
                         try:

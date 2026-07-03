@@ -107,7 +107,7 @@ async def _update_document_with_retry(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save extraction results to database. Please try again.",
-        )
+        ) from db_err
 
 
 def is_photo_rejection_message(text: str) -> bool:
@@ -503,7 +503,7 @@ async def _trigger_extraction_inner(
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Document file not found in storage. The source file may need to be re-imported.",
-                )
+                ) from download_err
 
             if not file_bytes:
                 # Same recovery for Clio notes when storage returns empty

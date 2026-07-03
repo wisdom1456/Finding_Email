@@ -36,7 +36,7 @@
 	import { isCaseSummary, isIntakeForm, isPrimaryIntakeCandidate, isVideoAudioFile } from '$lib/utils/documentClassification';
 	import { requiresSignatureReview, getDocumentSignatureDetection, getDocumentSignatureVerificationStatus, getDocumentSignatureStatus, getDocumentSignatureLabel, getDocumentSignatureBadgeClass, shouldShowSignatureBadge } from '$lib/utils/signatureDetection';
 	import { formatDate, formatFileSize, getStatusColor } from '$lib/utils/formatters';
-	import { shouldAutoExtract } from '$lib/utils/autoExtract';
+	import { shouldAutoExtract, docNeedsExtraction } from '$lib/utils/autoExtract';
 	import { runCoverageLoop } from '$lib/utils/bulkExtractLoop';
 
 	let caseData = $state<CaseData | null>(null);
@@ -81,13 +81,11 @@
 	let autoExtractRan = $state(false);
 
 	// Documents that are ready but missing extracted text (will be skipped in analysis)
-	let docsWithoutText = $derived(
-		documents.filter(doc => 
-			doc.status === 'ready' && 
-			!doc.extracted_at && 
-			!doc.is_flagged_as_junk
-		)
-	);
+	// Docs that genuinely still need text extracted (pending/deferred, not junk/excluded).
+	// Uses docNeedsExtraction so it stays consistent with the auto-extract trigger and
+	// does NOT false-flag Clio-imported text docs that are 'ready' with text but no
+	// extracted_at timestamp (which the old `ready && !extracted_at` check did).
+	let docsWithoutText = $derived(documents.filter(docNeedsExtraction));
 
 
 	// Find all potential intake documents (case summaries and intake forms)

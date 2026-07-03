@@ -27,8 +27,16 @@ const EXCLUDED_STATUSES = new Set([
 export function docNeedsExtraction(doc: AutoExtractDoc): boolean {
 	if (doc.is_flagged_as_junk) return false;
 	if (EXCLUDED_STATUSES.has(doc.status ?? '')) return false;
-	const hasText = Boolean((doc.extracted_text ?? '').trim());
-	return !doc.extracted_at && !hasText;
+	// If the text is loaded and non-empty, no extraction is needed.
+	if ((doc.extracted_text ?? '').trim()) return false;
+	// 'ready' and 'needs_review' are assigned by the extractor ONLY when text is
+	// present, so they always have text by construction — even when the document
+	// list omits extracted_text (payload size) and leaves extracted_at null, as
+	// with Clio-imported text docs. Do NOT use extracted_at as a text proxy here,
+	// or those docs get falsely flagged as missing text.
+	if (doc.status === 'ready' || doc.status === 'needs_review') return false;
+	// Remaining extractable-but-textless states (pending / deferred) need extraction.
+	return true;
 }
 
 export function shouldAutoExtract(docs: AutoExtractDoc[], opts: AutoExtractOpts): boolean {

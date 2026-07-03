@@ -244,6 +244,11 @@ async def import_clio_documents_helper(
                     "storage_path": storage_path,
                     "status": DocumentStatus.READY,
                     "extracted_text": content,
+                    # Clio communications arrive with their text already available, so
+                    # stamp extracted_at now. The UI uses extracted_at as a "has been
+                    # extracted" signal; omitting it made these ready docs look like
+                    # they were missing text (false 'needs attention' / analysis block).
+                    "extracted_at": datetime.now(timezone.utc).isoformat(),
                     "metadata": {
                         "clio_source": True,
                         "clio_type": "communication",
@@ -304,6 +309,9 @@ async def import_clio_documents_helper(
                     "storage_path": note_storage_path,
                     "status": DocumentStatus.READY,
                     "extracted_text": note_detail,
+                    # Text is already available at import — stamp extracted_at so the UI
+                    # doesn't treat this ready doc as missing text (see communication above).
+                    "extracted_at": datetime.now(timezone.utc).isoformat(),
                     "metadata": {
                         "clio_source": True,
                         "clio_type": "note",

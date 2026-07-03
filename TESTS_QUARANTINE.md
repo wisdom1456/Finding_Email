@@ -15,17 +15,24 @@ Established 2026-07-02 during the CI-repair effort. Baseline before repair was
 `test_synthesis_gate`, 3 stale `FakeLetterOpenAIClient` methods) and 2
 credential-dependent embedding tests now skip under mock/CI creds.
 
-**2026-07-02 un-quarantine pass:** 8 of the 9 pytest tests and all 3 vitest
-tests below were fixed and un-quarantined (root causes were stale mocks/fixtures
-and taxonomy drift, not product bugs). Verified against the full suites:
-pytest `1237 passed, 2 skipped, 1 xfailed` and vitest `649 passed, 1 skipped`,
-zero failures. The one remaining pytest row is blocked on a product decision.
+**2026-07-02 un-quarantine pass — ALL clear.** All 9 pytest and 3 vitest
+quarantines were resolved (root causes were stale mocks/fixtures and taxonomy
+drift, not product bugs). Verified against the full suites: pytest
+`1237 passed, 2 skipped` and vitest `649 passed, 1 skipped`, zero failures,
+**zero xfails remaining**. No tests are quarantined.
 
-| Test | Reason quarantined | Fix owed |
-|------|--------------------|----------|
-| `tests/api/test_service_role_resilience.py::test_cancel_case_succeeds_without_service_role_key` | Asserts `cancel_case` succeeds without `SUPABASE_SERVICE_KEY`; code currently raises | **Product decision**: implement user-client fallback, or update the test to the intended contract |
+The final one — `test_cancel_case_succeeds_without_service_role_key` — was
+settled by a **product decision (keep the app strict)**: `cancel-case` depends
+on the service-role client (durable-job cancellation touches `analysis_jobs`,
+off-limits to RLS-scoped user clients), so without `SUPABASE_SERVICE_KEY` it
+fails fast rather than silently falling back. The test was rewritten as
+`test_cancel_case_requires_service_role_key`, asserting that contract.
 
 ### Resolved 2026-07-02 (kept for traceability)
+
+- `tests/api/test_service_role_resilience.py::test_cancel_case_requires_service_role_key`
+  (was `..._succeeds_without_service_role_key`) — product decision: keep strict,
+  no user-client fallback. Rewritten to assert the service-role key is required.
 
 - `tests/api/test_analysis_lifecycle.py::test_get_status_success` /
   `::test_get_status_not_found` — the `_configure_supabase` mock dispatcher was

@@ -127,15 +127,19 @@ async def test_clio_disconnect_succeeds_without_service_role_key(resilience_clie
     assert response.json()["success"] is True
 
 
-@pytest.mark.xfail(
-    reason="[QUARANTINE] asserts cancel_case succeeds without SUPABASE_SERVICE_KEY, but the "
-    "code currently raises when it is absent; needs a product decision on user-client fallback. "
-    "Tracked in TESTS_QUARANTINE.md",
-    strict=False,
-)
 @pytest.mark.asyncio
-async def test_cancel_case_succeeds_without_service_role_key(resilience_client: AsyncClient):
-    response = await resilience_client.post("/api/analysis/cancel-case/case-001", headers={"Authorization": "Bearer mock_token"})
+async def test_cancel_case_requires_service_role_key(resilience_client: AsyncClient):
+    """cancel-case intentionally depends on the service-role client.
 
-    assert response.status_code == 200
-    assert response.json()["status"] == "cancelled"
+    Durable-job cancellation reads/writes ``analysis_jobs``, which RLS-scoped
+    user clients cannot touch, so the endpoint requires ``SUPABASE_SERVICE_KEY``.
+    Product decision (2026-07-02): keep the app strict — without the key the
+    service-client dependency fails fast rather than silently falling back to
+    the user client. (``delete_case`` / ``clio_disconnect`` above deliberately
+    operate on the user client and do *not* need the key.)
+    """
+    with pytest.raises(ValueError, match="SUPABASE_SERVICE_KEY"):
+        await resilience_client.post(
+            "/api/analysis/cancel-case/case-001",
+            headers={"Authorization": "Bearer mock_token"},
+        )

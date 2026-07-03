@@ -65,8 +65,16 @@ jobs:
       
       # Blocking: svelte-check is at zero errors (burned down 2026-07-02).
       # A new frontend type error now fails the build, matching backend lint.
+      # PUBLIC_* vars must be present so `svelte-kit sync` emits the
+      # $env/static/public members (config.ts, hooks.server.ts, etc.);
+      # otherwise their imports report "has no exported member". Mirrors the
+      # frontend Build step's env.
       - name: Check Svelte
         working-directory: ./frontend
+        env:
+          PUBLIC_API_URL: ${{ secrets.PUBLIC_API_URL || 'http://localhost:8080' }}
+          PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY || 'ci-placeholder-anon-key' }}
         run: npm run check
 
   backend-tests:

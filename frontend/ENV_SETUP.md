@@ -33,6 +33,18 @@ Configure these environment variables in the Vercel Dashboard:
 3. Copy the **Project URL** (for `PUBLIC_SUPABASE_URL`)
 4. Copy the **anon/public key** (for `PUBLIC_SUPABASE_ANON_KEY`)
 
+## Feature Flags
+
+- `PUBLIC_ENABLE_AUTO_EXTRACT` — when `true`, auto-runs bulk text extraction on
+  case load and hides the Verification Hub bulk "Run OCR" button.
+- `PUBLIC_ENABLE_AUTO_EXTRACT_FULL_COVERAGE` — **default off.** When `true`,
+  auto-extract uses the convergent full-coverage loop that guarantees every
+  document needing text is processed (or marked `extraction_failed` with a
+  visible error) instead of the legacy offset-paginated loop, which could
+  silently skip a window of documents. An unset flag evaluates as `false` at
+  runtime. Enable in a Vercel **preview** and verify a real case before turning
+  it on in **production**.
+
 ## Important Notes
 
 - The `PUBLIC_` prefix makes these variables available on the client-side

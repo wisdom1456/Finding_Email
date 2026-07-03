@@ -12,12 +12,16 @@ export interface AutoExtractOpts {
 	alreadyRanThisLoad: boolean;
 }
 
+// Keep in sync with NON_RETRYABLE in src/legal_portal/api/routes/documents.py.
+// extraction_failed is terminal for auto-fire: a doc the bulk pass could not
+// extract must not re-trigger the whole bulk run on every future page load.
 const EXCLUDED_STATUSES = new Set([
 	'skipped_small_image',
 	'skipped',
 	'duplicate',
 	'corrupted',
 	'download_failed',
+	'extraction_failed',
 ]);
 
 export function docNeedsExtraction(doc: AutoExtractDoc): boolean {

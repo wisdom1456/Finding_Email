@@ -37,6 +37,7 @@
 	import { requiresSignatureReview, getDocumentSignatureDetection, getDocumentSignatureVerificationStatus, getDocumentSignatureStatus, getDocumentSignatureLabel, getDocumentSignatureBadgeClass, shouldShowSignatureBadge } from '$lib/utils/signatureDetection';
 	import { formatDate, formatFileSize, getStatusColor } from '$lib/utils/formatters';
 	import { shouldAutoExtract } from '$lib/utils/autoExtract';
+	import { runCoverageLoop } from '$lib/utils/bulkExtractLoop';
 
 	let caseData = $state<CaseData | null>(null);
 	let documents = $state<any[]>([]);
@@ -852,40 +853,83 @@
 			const { session, user } = await getSecureSession();
 			if (!session || !user) throw new Error('Not authenticated');
 
-			// Paginated bulk-extract: process 20 docs per Vercel invocation to avoid the
-			// 800s function timeout on large cases (200 docs × 45s = 9000s without pagination).
-			let offset = 0;
-			let hasMore = true;
-			let totalExtracted = 0;
-			let batchNum = 0;
+			const fullCoverage = env.PUBLIC_ENABLE_AUTO_EXTRACT_FULL_COVERAGE === 'true';
 
-			while (hasMore) {
-				batchNum++;
-				const response = await fetch(`${getApiUrl()}/api/documents/bulk-extract`, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${session.access_token}`
-					},
-					body: JSON.stringify({ case_id: caseId, batch_size: 20, offset })
-				});
+			if (fullCoverage) {
+				// Convergent coverage loop: every call sends offset:0 and the backend
+				// re-queries the live retry-set (which shrinks as docs are extracted or
+				// marked failed), so no window is ever skipped. Failures are surfaced.
+				const runBatch = async () => {
+					const response = await fetch(`${getApiUrl()}/api/documents/bulk-extract`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${session.access_token}`
+						},
+						body: JSON.stringify({ case_id: caseId, batch_size: 20, offset: 0 })
+					});
+					if (!response.ok) throw new Error(`Bulk extraction failed (${response.status})`);
+					const r = await response.json();
+					// Refresh document list after each batch so user sees incremental progress
+					await loadDocuments();
+					return {
+						extracted_count: r.extracted_count ?? 0,
+						failed_count: r.failed_count ?? 0,
+						errors: r.errors ?? [],
+						remaining: r.remaining ?? 0
+					};
+				};
+				// Safety cap: (docs / batch) + slack. Prevents a pathological infinite loop.
+				const maxBatches = Math.ceil((documents?.length ?? 20) / 20) + 3;
+				const out = await runCoverageLoop(runBatch, () => {}, maxBatches);
 
-				if (!response.ok) throw new Error(`Bulk extraction failed on batch ${batchNum}`);
-
-				const result = await response.json();
-				totalExtracted += result.extracted_count ?? 0;
-				hasMore = result.has_more ?? false;
-				offset = result.next_offset ?? offset;
-
-				// Refresh document list after each batch so user sees incremental progress
-				await loadDocuments();
-
-				if (hasMore) {
-					toastStore.info(`Extracted ${totalExtracted} so far, continuing...`);
+				if (out.totalFailed > 0 || out.hitCap) {
+					const detail = out.errors.slice(0, 3).join('; ');
+					toastStore.error(
+						`Extracted ${out.totalExtracted}, but ${out.totalFailed} document(s) could not be extracted` +
+							(out.hitCap ? ' (stopped at safety limit)' : '') +
+							(detail ? `: ${detail}` : '. See the document list for details.')
+					);
+				} else {
+					toastStore.success(`Extracted ${out.totalExtracted} document(s)`);
 				}
-			}
+			} else {
+				// --- legacy offset loop (flag OFF): unchanged existing behavior ---
+				// Paginated bulk-extract: process 20 docs per Vercel invocation to avoid the
+				// 800s function timeout on large cases (200 docs × 45s = 9000s without pagination).
+				let offset = 0;
+				let hasMore = true;
+				let totalExtracted = 0;
+				let batchNum = 0;
 
-			toastStore.success(`Extracted ${totalExtracted} document(s)`);
+				while (hasMore) {
+					batchNum++;
+					const response = await fetch(`${getApiUrl()}/api/documents/bulk-extract`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							Authorization: `Bearer ${session.access_token}`
+						},
+						body: JSON.stringify({ case_id: caseId, batch_size: 20, offset })
+					});
+
+					if (!response.ok) throw new Error(`Bulk extraction failed on batch ${batchNum}`);
+
+					const result = await response.json();
+					totalExtracted += result.extracted_count ?? 0;
+					hasMore = result.has_more ?? false;
+					offset = result.next_offset ?? offset;
+
+					// Refresh document list after each batch so user sees incremental progress
+					await loadDocuments();
+
+					if (hasMore) {
+						toastStore.info(`Extracted ${totalExtracted} so far, continuing...`);
+					}
+				}
+
+				toastStore.success(`Extracted ${totalExtracted} document(s)`);
+			}
 
 			// Force UI update by resetting the state flag before final checks
 			runningBulkOcr = false;

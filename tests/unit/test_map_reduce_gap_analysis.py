@@ -301,7 +301,7 @@ class TestSmallGroupMergeMap:
         ]
         for role in all_roles:
             target = role
-            for hop in range(3):
+            for _hop in range(3):
                 next_target = _SMALL_GROUP_MERGE_MAP.get(target)
                 if next_target is None:
                     break

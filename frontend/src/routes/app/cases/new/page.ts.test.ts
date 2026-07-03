@@ -41,21 +41,21 @@ describe('cases/new/+page.ts load', () => {
 				data: { full_name: 'Test' } // no default_jurisdiction
 			})
 		} as any);
-		expect(result.defaultJurisdiction).toBe('');
+		expect(result).toEqual({ defaultJurisdiction: '' });
 	});
 
 	it('returns empty string when profile fetch fails (no Florida fallback)', async () => {
 		const result = await load({
 			fetch: mockFetch({ ok: false })
 		} as any);
-		expect(result.defaultJurisdiction).toBe('');
+		expect(result).toEqual({ defaultJurisdiction: '' });
 	});
 
 	it('returns empty string when fetch throws (network error)', async () => {
 		const result = await load({
 			fetch: vi.fn().mockRejectedValue(new Error('Network'))
 		} as any);
-		expect(result.defaultJurisdiction).toBe('');
+		expect(result).toEqual({ defaultJurisdiction: '' });
 	});
 
 	it('returns empty string for Florida-shaped null/undefined profile', async () => {
@@ -67,6 +67,6 @@ describe('cases/new/+page.ts load', () => {
 				data: { default_jurisdiction: null }
 			})
 		} as any);
-		expect(result.defaultJurisdiction).toBe('');
+		expect(result).toEqual({ defaultJurisdiction: '' });
 	});
 });

@@ -322,7 +322,8 @@
 
 		flushPendingTokens();
 
-		if (demandGenerationState !== 'complete' && demandGenerationState !== 'error') {
+		// The only path that sets 'error' (below) throws, so state is never 'error' here.
+		if (demandGenerationState !== 'complete') {
 			if (markdownBuffer.trim()) {
 				demandLetters = {
 					...demandLetters,
@@ -413,10 +414,8 @@
 					const recovered = await tryRecoverSavedLetter();
 					if (recovered) return;
 				}
-				if (demandGenerationState !== 'error') {
-					demandGenerationState = 'error';
-					demandPhaseMessage = err.message || 'Generation failed';
-				}
+				demandGenerationState = 'error';
+				demandPhaseMessage = err.message || 'Generation failed';
 				toastStore.error(err.message || 'Letter generation failed');
 				break;
 			}

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 
 class TestCacheManagerRedisToggle:
@@ -25,11 +23,6 @@ class TestCacheManagerRedisToggle:
         assert cm.redis_client is None
         get_cm.cache_clear()
 
-    @pytest.mark.xfail(
-        reason="[QUARANTINE] patches cache_manager.redis, which no longer exists after the "
-        "redis-wiring refactor; needs mock-target update. Tracked in TESTS_QUARANTINE.md",
-        strict=False,
-    )
     def test_redis_enabled_attempts_connection(self):
         """When REDIS_CACHE_ENABLED=true, CacheManager tries to connect."""
         mock_settings = MagicMock()
@@ -47,7 +40,7 @@ class TestCacheManagerRedisToggle:
         ), patch(
             "legal_portal.utils.cache_manager.REDIS_AVAILABLE", True
         ), patch(
-            "legal_portal.utils.cache_manager.redis"
+            "legal_portal.utils.cache_manager.redis", create=True
         ) as redis_mock:
             # Simulate connection failure → graceful fallback to None
             redis_mock.Redis.return_value.ping.side_effect = ConnectionError("no redis")

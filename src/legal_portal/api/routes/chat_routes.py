@@ -114,7 +114,7 @@ async def stream_chat_response(
         )
     except Exception as e:
         logger.error(f"Error in stream_chat_response: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/chat", response_model=ChatMessageResponse)

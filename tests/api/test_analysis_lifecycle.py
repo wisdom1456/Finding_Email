@@ -29,6 +29,7 @@ def _configure_supabase(mock_client, analysis_rows=None, case_rows=None):
         mock_table.upsert.return_value = mock_table
         mock_table.eq.return_value = mock_table
         mock_table.neq.return_value = mock_table
+        mock_table.in_.return_value = mock_table
         mock_table.order.return_value = mock_table
         mock_table.limit.return_value = mock_table
         mock_table.single.return_value = mock_table
@@ -107,11 +108,6 @@ async def test_cancel_analysis_unauthorized(app_client: AsyncClient, mock_supaba
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    reason="[QUARANTINE] mock_supabase_client returns MagicMock fields that fail the "
-    "tightened status ResponseModel validation; needs realistic mock rows. Tracked in TESTS_QUARANTINE.md",
-    strict=False,
-)
 @pytest.mark.asyncio
 async def test_get_status_success(app_client: AsyncClient, mock_supabase_client):
     """200 + analysis status for valid case."""
@@ -136,11 +132,6 @@ async def test_get_status_success(app_client: AsyncClient, mock_supabase_client)
     assert data["status"] in ["processing", "completed", "pending", "failed"]
 
 
-@pytest.mark.xfail(
-    reason="[QUARANTINE] mock_supabase_client returns MagicMock fields that fail the "
-    "tightened status ResponseModel validation; needs realistic mock rows. Tracked in TESTS_QUARANTINE.md",
-    strict=False,
-)
 @pytest.mark.asyncio
 async def test_get_status_not_found(app_client: AsyncClient, mock_supabase_client):
     """404 when no analysis exists for case."""

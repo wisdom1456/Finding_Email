@@ -1293,4 +1293,4 @@ async def sync_clio_matter(
         raise HTTPException(
             status_code=500,
             detail="Failed to sync Clio matter"
-        )
+        ) from e

@@ -1362,7 +1362,7 @@ RULES:
 
             from legal_portal.config.default import settings as _settings
             if not _settings.enable_strict_schema_retry:
-                raise ValueError(f"Failed to parse fact extraction response as JSON: {e}")
+                raise ValueError(f"Failed to parse fact extraction response as JSON: {e}") from e
 
             # One re-ask in enforced-JSON mode before giving up. If the first
             # attempt ran out of output budget, raise the cap for the retry.
@@ -1835,7 +1835,7 @@ RULES:
         try:
             fact_data = json.loads(raw_response)
         except json.JSONDecodeError as e:
-            raise ValueError(f"JSON parse failed for batch {batch_idx+1}: {e}")
+            raise ValueError(f"JSON parse failed for batch {batch_idx+1}: {e}") from e
 
         # Null sources become an explicit extraction caveat (see single-shot path)
         unsourced = []
@@ -2069,7 +2069,7 @@ Return JSON:
             issue_data = json.loads(raw_response)
         except json.JSONDecodeError as e:
             logger.error(f"[STAGE:2:ERROR] JSON parse failed: {e}. Response: {raw_response[:500]}")
-            raise ValueError(f"Failed to parse issue mapping response as JSON: {e}")
+            raise ValueError(f"Failed to parse issue mapping response as JSON: {e}") from e
 
         return LegalIssueMap(
             primary_issues=[LegalIssue(**i) for i in issue_data.get("primary_issues", [])],
@@ -2235,7 +2235,7 @@ Return ONLY valid JSON.
             analysis_data = json.loads(raw_response)
         except json.JSONDecodeError as e:
             logger.error(f"[STAGE:3:ERROR] JSON parse failed: {e}. Response: {raw_response[:500]}")
-            raise ValueError(f"Failed to parse deep analysis response as JSON: {e}")
+            raise ValueError(f"Failed to parse deep analysis response as JSON: {e}") from e
 
         return DeepAnalysis(
             issue_analyses=[IssueAnalysis(**a) for a in analysis_data.get("issue_analyses", [])],

@@ -134,19 +134,17 @@ describe('progressStore', () => {
 		expect(state.status).toBe('active');
 	});
 
-	// [QUARANTINE] uses legacy stage id 'doc_summary'; DEFAULT_STAGES renamed it
-	// to 'doc_analysis'. Needs a stage-taxonomy decision. See TESTS_QUARANTINE.md.
-	it.skip('updateProgress updates stage state', () => {
+	it('updateProgress updates stage state', () => {
 		progressStore.updateProgress({
 			type: 'progress',
 			message: 'Working',
-			phase: 'doc_summary',
+			phase: 'doc_analysis',
 			percent: 20,
-			stage: { id: 'doc_summary', name: 'Document Analysis', status: 'active', progress: 50 },
+			stage: { id: 'doc_analysis', name: 'Document Analysis', status: 'active', progress: 50 },
 		});
 
 		const state = get(progressStore);
-		const stage = state.stages.find(s => s.id === 'doc_summary');
+		const stage = state.stages.find(s => s.id === 'doc_analysis');
 		expect(stage?.status).toBe('active');
 		expect(stage?.progress).toBe(50);
 	});
@@ -319,9 +317,7 @@ describe('progressStore', () => {
 
 	// ── stage cascade logic (via SSE message) ──
 
-	// [QUARANTINE] uses legacy stage id 'issue_mapping'; DEFAULT_STAGES renamed it
-	// to 'legal_mapping'. Needs a stage-taxonomy decision. See TESTS_QUARANTINE.md.
-	it.skip('marks previous stages as completed when a later stage becomes active', () => {
+	it('marks previous stages as completed when a later stage becomes active', () => {
 		// Connect — this creates a real SSEClient with our MockEventSource
 		progressStore.connect('http://localhost/stream', undefined, undefined, 'test-token');
 		vi.advanceTimersByTime(0); // trigger onopen
@@ -353,18 +349,18 @@ describe('progressStore', () => {
 		// Test the updateProgress behavior accurately:
 		progressStore.updateProgress({
 			type: 'progress', message: '', phase: '', percent: 40,
-			stage: { id: 'issue_mapping', name: 'Legal Issues', status: 'active', progress: 0 },
+			stage: { id: 'legal_mapping', name: 'Legal Issues', status: 'active', progress: 0 },
 		});
 
 		const state = get(progressStore);
-		const issueMapping = state.stages.find(s => s.id === 'issue_mapping');
+		const legalMapping = state.stages.find(s => s.id === 'legal_mapping');
 
 		// The target stage IS updated
-		expect(issueMapping?.status).toBe('active');
+		expect(legalMapping?.status).toBe('active');
 
 		// Previous stages are NOT cascaded in updateProgress (only in SSE path)
-		const docSummary = state.stages.find(s => s.id === 'doc_summary');
-		expect(docSummary?.status).toBe('pending');
+		const docAnalysis = state.stages.find(s => s.id === 'doc_analysis');
+		expect(docAnalysis?.status).toBe('pending');
 	});
 
 	// ── isSupported ──

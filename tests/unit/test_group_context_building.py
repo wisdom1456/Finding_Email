@@ -94,8 +94,8 @@ class TestGroupContextBuilding:
         # Intake should come first (priority 0), group second (priority 3)
         assert "intake_form.pdf" in result.context_text
         lines = result.context_text.split("\n")
-        intake_pos = next(i for i, l in enumerate(lines) if "intake_form" in l)
-        group_pos = next(i for i, l in enumerate(lines) if "Test Group" in l)
+        intake_pos = next(i for i, line in enumerate(lines) if "intake_form" in line)
+        group_pos = next(i for i, line in enumerate(lines) if "Test Group" in line)
         assert intake_pos < group_pos
 
     def test_flag_off_ignores_groups(self):
@@ -141,8 +141,8 @@ class TestGroupContextBuilding:
         result = analyzer._build_condensed_context(summaries, group_summaries=groups)
 
         lines = result.context_text.split("\n")
-        group_pos = next(i for i, l in enumerate(lines) if "Test Group" in l)
-        doc_pos = next(i for i, l in enumerate(lines) if "random.pdf" in l)
+        group_pos = next(i for i, line in enumerate(lines) if "Test Group" in line)
+        doc_pos = next(i for i, line in enumerate(lines) if "random.pdf" in line)
         assert group_pos < doc_pos
 
     def test_omitted_count_includes_groups(self):

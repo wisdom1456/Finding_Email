@@ -82,6 +82,7 @@ describe('DemandLetterSection', () => {
 		render(DemandLetterSection, {
 			props: {
 				caseId: 'case-1',
+				analysisId: 'analysis-1',
 				opposingParties: makeParties(),
 				initialDemandLetters: { 'Acme Corp': '<html><body>Demand</body></html>' },
 			},
@@ -95,6 +96,7 @@ describe('DemandLetterSection', () => {
 		render(DemandLetterSection, {
 			props: {
 				caseId: 'case-1',
+				analysisId: 'analysis-1',
 				opposingParties: makeParties(),
 				initialDemandLetters: { 'Acme Corp': '<html>Letter</html>' },
 			},
@@ -107,6 +109,7 @@ describe('DemandLetterSection', () => {
 		render(DemandLetterSection, {
 			props: {
 				caseId: 'case-1',
+				analysisId: 'analysis-1',
 				opposingParties: makeParties(),
 				initialDemandAmount: 50000,
 			},
@@ -120,6 +123,7 @@ describe('DemandLetterSection', () => {
 		render(DemandLetterSection, {
 			props: {
 				caseId: 'case-1',
+				analysisId: 'analysis-1',
 				opposingParties: makeParties(),
 				initialSpecificDemands: 'Return the deposit',
 			},

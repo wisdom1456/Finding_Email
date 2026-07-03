@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -21,6 +21,28 @@ from legal_portal.core.data_models import (
     ProcessingResult,
 )
 from legal_portal.services.analysis.main_processor import process_case_documents
+
+
+@pytest.fixture(autouse=True)
+def _isolate_summary_cache(monkeypatch):
+    """Force document-summary cache misses within main_processor.
+
+    The T1 triage path reads/writes a persistent on-disk DocumentCache (.cache).
+    Without isolation these workflow tests become order- and machine-dependent
+    (a warm cache serves a summary and the mocked generator is never awaited),
+    which is exactly the flakiness that got them quarantined. Returning a fresh
+    always-miss cache keeps summary-generation call counts deterministic.
+    """
+
+    def _fresh_cache(*_args, **_kwargs):
+        cache = MagicMock()
+        cache.get_document_summary.return_value = None
+        return cache
+
+    monkeypatch.setattr(
+        "legal_portal.services.analysis.main_processor.DocumentCache",
+        _fresh_cache,
+    )
 
 
 def _make_processed_document(
@@ -141,11 +163,6 @@ def _sample_multi_stage_result() -> MultiStageAnalysisResult:
     )
 
 
-@pytest.mark.xfail(
-    reason="[QUARANTINE] full-workflow test resolves to status 'failed' under mocked services; "
-    "needs a pipeline fake that reaches 'completed' or real backing. Tracked in TESTS_QUARANTINE.md",
-    strict=False,
-)
 @pytest.mark.asyncio
 async def test_full_document_processing_workflow(
     mock_openai_client,
@@ -182,6 +199,10 @@ async def test_full_document_processing_workflow(
                 corpus_coverage_warnings=True,
                 openai_max_tokens=12000,
                 max_tokens_per_batch=50000,
+                enable_group_detection=False,
+                enable_group_summarization=False,
+                enable_document_triage=False,
+                duplicate_similarity_threshold=0.85,
             ),
         ),
         patch(
@@ -236,11 +257,6 @@ async def test_full_document_processing_workflow(
     assert all(doc.document_type == DocumentType.CASE_DOCUMENT for doc in docs_passed_for_summary)
 
 
-@pytest.mark.xfail(
-    reason="[QUARANTINE] full-workflow test resolves to status 'failed' under mocked services; "
-    "needs a pipeline fake that reaches 'completed' or real backing. Tracked in TESTS_QUARANTINE.md",
-    strict=False,
-)
 @pytest.mark.asyncio
 async def test_workflow_skips_document_summary_when_no_case_documents(
     mock_openai_client,
@@ -269,6 +285,10 @@ async def test_workflow_skips_document_summary_when_no_case_documents(
                 corpus_coverage_warnings=False,
                 openai_max_tokens=12000,
                 max_tokens_per_batch=50000,
+                enable_group_detection=False,
+                enable_group_summarization=False,
+                enable_document_triage=False,
+                duplicate_similarity_threshold=0.85,
             ),
         ),
         patch(
@@ -373,12 +393,6 @@ def test_api_contract_serialization(sample_document_summaries):
     assert len(json_str) > 0
 
 
-@pytest.mark.xfail(
-    reason="[QUARANTINE] full-workflow test resolves to status 'failed' under mocked services; "
-    "needs a pipeline fake that reaches the expected terminal state or real backing. "
-    "Tracked in TESTS_QUARANTINE.md",
-    strict=False,
-)
 @pytest.mark.asyncio
 async def test_workflow_graceful_failure(
     mock_openai_client,
@@ -413,6 +427,10 @@ async def test_workflow_graceful_failure(
                 corpus_coverage_warnings=False,
                 openai_max_tokens=12000,
                 max_tokens_per_batch=50000,
+                enable_group_detection=False,
+                enable_group_summarization=False,
+                enable_document_triage=False,
+                duplicate_similarity_threshold=0.85,
             ),
         ),
         patch(
@@ -543,6 +561,10 @@ async def test_corpus_coverage_warnings_appear_in_result(
                 corpus_coverage_warnings=True,
                 openai_max_tokens=12000,
                 max_tokens_per_batch=50000,
+                enable_group_detection=False,
+                enable_group_summarization=False,
+                enable_document_triage=False,
+                duplicate_similarity_threshold=0.85,
             ),
         ),
         patch(
@@ -597,11 +619,6 @@ async def test_corpus_coverage_warnings_appear_in_result(
         )
 
 
-@pytest.mark.xfail(
-    reason="[QUARANTINE] full-workflow test resolves to status 'failed' under mocked services; "
-    "needs a pipeline fake that reaches 'completed' or real backing. Tracked in TESTS_QUARANTINE.md",
-    strict=False,
-)
 @pytest.mark.asyncio
 async def test_cost_tracking_aggregates_correctly(
     mock_openai_client,
@@ -629,6 +646,10 @@ async def test_cost_tracking_aggregates_correctly(
                 corpus_coverage_warnings=False,
                 openai_max_tokens=12000,
                 max_tokens_per_batch=50000,
+                enable_group_detection=False,
+                enable_group_summarization=False,
+                enable_document_triage=False,
+                duplicate_similarity_threshold=0.85,
             ),
         ),
         patch(

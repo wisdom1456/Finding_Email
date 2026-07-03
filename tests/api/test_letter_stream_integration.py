@@ -233,12 +233,6 @@ async def _fake_ai_preferences(*_args, **_kwargs) -> Dict[str, str]:
     return {}
 
 
-@pytest.mark.xfail(
-    reason="[QUARANTINE] asserts a findings-stream phase order that changed with the "
-    "strategy/critic/repair pipeline; needs re-baselining against current emission order. "
-    "Tracked in TESTS_QUARANTINE.md",
-    strict=False,
-)
 @pytest.mark.asyncio
 async def test_findings_stream_event_order_with_strategy_critic_and_repair(monkeypatch):
     """Stream emits expected v2 phase/event order and applies critic+repair path."""
@@ -284,11 +278,11 @@ async def test_findings_stream_event_order_with_strategy_critic_and_repair(monke
             _violations,
             *,
             mode="default",
-            model="gpt-5-mini",
+            model="gpt-5.4-mini",
             critic_feedback=None,
         ):
             assert mode == "strict_quality"
-            assert model == "gpt-5-mini"
+            assert model == "gpt-5.4-mini"
             assert critic_feedback and critic_feedback.get("failed_sections")
             return (
                 "Repaired draft includes February 14, 2023 email and $47,656.00 payment anchor "

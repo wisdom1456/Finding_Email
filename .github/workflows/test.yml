@@ -37,7 +37,9 @@ jobs:
       - name: Lint Python with ruff (correctness — blocking)
         run: |
           pip install ruff
-          ruff check src/ tests/ worker/ --select F401,F811,F821,F823,F702,E9
+          # B904 (raise ... from) added 2026-07-02 for exception-chain clarity;
+          # B007/E741/E701 were at/driven to zero the same day.
+          ruff check src/ tests/ worker/ --select F401,F811,F821,F823,F702,E9,B904,B007,E741,E701
 
       - name: Lint Python with ruff (style — advisory)
         run: |
@@ -61,13 +63,19 @@ jobs:
         working-directory: ./frontend
         run: npm ci
       
-      # Advisory like Python mypy / ruff-style: 10 pre-existing svelte-check
-      # errors are tracked debt (see TESTS_QUARANTINE.md). Burn to zero, then
-      # drop continue-on-error to make frontend type errors blocking again.
+      # Blocking: svelte-check is at zero errors (burned down 2026-07-02).
+      # A new frontend type error now fails the build, matching backend lint.
+      # PUBLIC_* vars must be present so `svelte-kit sync` emits the
+      # $env/static/public members (config.ts, hooks.server.ts, etc.);
+      # otherwise their imports report "has no exported member". Mirrors the
+      # frontend Build step's env.
       - name: Check Svelte
         working-directory: ./frontend
+        env:
+          PUBLIC_API_URL: ${{ secrets.PUBLIC_API_URL || 'http://localhost:8080' }}
+          PUBLIC_SUPABASE_URL: ${{ secrets.PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.PUBLIC_SUPABASE_ANON_KEY || 'ci-placeholder-anon-key' }}
         run: npm run check
-        continue-on-error: true
 
   backend-tests:
     name: Backend Tests

@@ -49,7 +49,7 @@ async def _dedup_email_threads(
 
     flagged_ids = set()
 
-    for norm_subject, group in thread_groups.items():
+    for _norm_subject, group in thread_groups.items():
         if len(group) < 2:
             continue
 

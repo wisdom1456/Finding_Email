@@ -654,7 +654,7 @@ async def stream_findings_letter(
         raise
     except Exception as e:
         logger.error(f"Error in stream_findings_letter: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 
@@ -1162,7 +1162,7 @@ async def stream_recommendation_letter(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid letter_type '{letter_type}'. Valid types: {valid_types}",
-        )
+        ) from None
 
     effective_schema_version = 2 if (schema_version == 2 and settings.letter_stream_schema_v2) else 1
     artifacts = processing_result.artifacts or {}

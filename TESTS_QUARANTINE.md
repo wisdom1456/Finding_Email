@@ -71,9 +71,15 @@ fixed. No vitest tests remain quarantined.
 
 ## Advisory (not blocking, tracked debt)
 
-- **svelte-check** (10 errors) is advisory in CI (`continue-on-error`), matching
-  how Python `mypy` and ruff-style are already treated. Burn these to zero, then
-  re-block — same pattern as the ruff style backlog.
+- **svelte-check** — burned to **0 errors / 0 warnings** and re-blocked
+  2026-07-02 (`continue-on-error` dropped in `.github/workflows/test.yml`). A new
+  frontend type error now fails the build. Root causes were 6 test-file type
+  errors (missing required `analysisId` prop; `defaultJurisdiction` accessed on a
+  `PageLoad` type that includes `void`) and 2 redundant `!== 'error'` guards in
+  `DemandLetterSection.svelte` that TS control-flow analysis proved dead (the
+  error-setting path throws / the state is already narrowed).
+- **ruff style** backlog remains advisory (`continue-on-error`), same pattern as
+  Python `mypy`. Widen the blocking `--select` list as categories reach zero.
 
 ## CI environment notes (not test debt)
 

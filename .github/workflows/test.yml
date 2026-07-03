@@ -61,13 +61,11 @@ jobs:
         working-directory: ./frontend
         run: npm ci
       
-      # Advisory like Python mypy / ruff-style: 10 pre-existing svelte-check
-      # errors are tracked debt (see TESTS_QUARANTINE.md). Burn to zero, then
-      # drop continue-on-error to make frontend type errors blocking again.
+      # Blocking: svelte-check is at zero errors (burned down 2026-07-02).
+      # A new frontend type error now fails the build, matching backend lint.
       - name: Check Svelte
         working-directory: ./frontend
         run: npm run check
-        continue-on-error: true
 
   backend-tests:
     name: Backend Tests

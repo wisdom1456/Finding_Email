@@ -77,6 +77,7 @@ class BulkExtractResponse(BaseModel):
     has_more: bool = False    # True if more documents remain beyond this batch
     next_offset: int = 0      # Offset to pass in the next call when has_more is True
     total_queued: int = 0     # Total documents found before applying offset/batch_size
+    remaining: int = 0        # Retry-set docs still needing extraction after this batch
 
 
 class VerifyDocumentRequest(BaseModel):
@@ -1118,6 +1119,19 @@ async def bulk_delete_documents(
     )
 
 
+def _mark_extraction_failed(service_supabase, doc_id: str, message: str) -> None:
+    """Durably record a bulk extraction failure/skip so the doc leaves the
+    retry-set and surfaces to the user (no silent failures)."""
+    try:
+        service_supabase.table("documents").update({
+            "status": DocumentStatus.EXTRACTION_FAILED,
+            "extraction_error": message[:2000],
+            "updated_at": datetime.utcnow().isoformat(),
+        }).eq("id", doc_id).execute()
+    except Exception as mark_err:  # never let bookkeeping crash the batch
+        logger.error(f"Failed to mark {doc_id} extraction_failed: {mark_err}")
+
+
 @router.post("/bulk-extract", response_model=BulkExtractResponse)
 async def bulk_extract_documents(
     request: BulkExtractRequest,
@@ -1147,12 +1161,26 @@ async def bulk_extract_documents(
             f"| batch_size={batch_size} offset={offset}"
         )
 
-        # Get all documents for this case that need extraction (no extracted_text yet)
+        # Retry-set: docs that still genuinely need a bulk attempt. Must mirror the
+        # frontend EXCLUDED_STATUSES in autoExtract.ts. Excluding these non-retryable
+        # statuses (plus junk) is what lets the frontend coverage loop converge without
+        # re-selecting docs it can never extract.
+        NON_RETRYABLE = [
+            DocumentStatus.SKIPPED,
+            DocumentStatus.DUPLICATE,
+            DocumentStatus.CORRUPTED,
+            DocumentStatus.DOWNLOAD_FAILED,
+            DocumentStatus.EXTRACTION_FAILED,
+        ]
+        query = user_supabase.table("documents").select(
+            "id, file_name, file_type, storage_path, file_size"
+        )
+        for st in NON_RETRYABLE:
+            query = query.neq("status", st)
         response = (
-            user_supabase.table("documents")
-            .select("id, file_name, file_type, storage_path, file_size")
+            query
             .eq("case_id", request.case_id)
-            .neq("status", DocumentStatus.SKIPPED)
+            .eq("is_flagged_as_junk", False)
             .or_("extracted_text.is.null,extracted_text.eq.''")
             .order("created_at", desc=False)
             .execute()
@@ -1184,6 +1212,8 @@ async def bulk_extract_documents(
                 skip_msg = f"Skipped {file_name}: PDF too large ({file_size / (1024*1024):.1f}MB) for bulk OCR. Extract individually."
                 logger.warning(skip_msg)
                 errors.append(skip_msg)
+                # Persist so the doc leaves the retry-set and the user sees why.
+                _mark_extraction_failed(service_supabase, doc["id"], skip_msg)
                 continue
 
             try:
@@ -1208,17 +1238,29 @@ async def bulk_extract_documents(
                     error_msg = f"No text extracted from {file_name} ({result.get('extraction_error', 'unsupported format')})"
                     logger.warning(error_msg)
                     errors.append(error_msg)
+                    # Idempotent — inner already marks extraction_failed on empty text,
+                    # this guarantees a non-empty extraction_error the user can see.
+                    _mark_extraction_failed(service_supabase, doc["id"], error_msg)
             except asyncio.TimeoutError:
                 failed_count += 1
                 error_msg = f"Timeout extracting {file_name} (>{DOC_TIMEOUT}s). Try extracting individually."
                 logger.error(error_msg)
                 errors.append(error_msg)
+                # Inner was killed before its own write — persist so the doc leaves
+                # the retry-set instead of silently staying pending.
+                _mark_extraction_failed(service_supabase, doc["id"], error_msg)
             except Exception as e:
                 failed_count += 1
                 error_msg = f"Failed to extract {file_name}: {str(e)}"
                 logger.error(error_msg)
                 errors.append(error_msg)
+                _mark_extraction_failed(service_supabase, doc["id"], error_msg)
 
+        # Every touched doc has now left the retry-set (extracted → has text, or
+        # marked extraction_failed). remaining is the live count still needing work;
+        # with the frontend sending offset=0, total_queued is that live count and
+        # next_offset == docs processed this batch, so this strictly decreases.
+        remaining = max(total_queued - next_offset, 0)
         return BulkExtractResponse(
             extracted_count=extracted_count,
             failed_count=failed_count + skipped_count,
@@ -1226,6 +1268,7 @@ async def bulk_extract_documents(
             has_more=has_more,
             next_offset=next_offset,
             total_queued=total_queued,
+            remaining=remaining,
         )
 
     except Exception as e:

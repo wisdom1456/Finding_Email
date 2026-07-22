@@ -101,6 +101,9 @@ class TestHandleRetry:
 
 class TestHandleFailure:
     def test_marks_job_result_and_case_failed(self, worker):
+        # No other active job for the case → case should be marked error.
+        worker.supabase.table.return_value.select.return_value.eq.return_value.in_.return_value.neq.return_value.execute.return_value = _execute_result(count=0)
+
         worker._handle_failure("j" * 36, "a" * 36, "c" * 36, Exception("KeyError"))
 
         tables = [c.args[0] for c in worker.supabase.table.call_args_list]
@@ -111,6 +114,25 @@ class TestHandleFailure:
         job_fields = worker.supabase.table.return_value.update.call_args_list[0][0][0]
         assert job_fields["status"] == "failed"
         assert job_fields["error_type"] == "terminal"
+
+    def test_result_update_guarded_on_processing(self, worker):
+        """A re-run may have reset the shared row — failure must not clobber it."""
+        worker.supabase.table.return_value.select.return_value.eq.return_value.in_.return_value.neq.return_value.execute.return_value = _execute_result(count=0)
+
+        worker._handle_failure("j" * 36, "a" * 36, "c" * 36, Exception("boom"))
+
+        eq_calls = worker.supabase.table.return_value.update.return_value.eq.return_value.eq.call_args_list
+        assert any(c.args == ("status", "processing") for c in eq_calls)
+
+    def test_case_not_errored_when_other_job_active(self, worker):
+        worker.supabase.table.return_value.select.return_value.eq.return_value.in_.return_value.neq.return_value.execute.return_value = _execute_result(count=1)
+
+        worker._handle_failure("j" * 36, "a" * 36, "c" * 36, Exception("boom"))
+
+        case_updates = [
+            c for c in worker.supabase.table.call_args_list if c.args[0] == "cases"
+        ]
+        assert case_updates == []
 
 
 class TestHandleCancel:
@@ -134,6 +156,22 @@ class TestHandleCancel:
             c for c in worker.supabase.table.call_args_list if c.args[0] == "cases"
         ]
         assert case_updates == []
+
+    def test_superseded_leaves_result_and_case_untouched(self, worker):
+        """A re-run supersede: the API already reset analysis_results for the
+        new run. The old worker must touch neither analysis_results nor cases —
+        doing so is the self-cancel loop that caused the original bug."""
+        worker.supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = _execute_result(
+            data=[{"error": "Superseded by re-run"}]
+        )
+
+        worker._handle_cancel("j" * 36, "a" * 36, "c" * 36)
+
+        tables = [c.args[0] for c in worker.supabase.table.call_args_list]
+        assert "analysis_results" not in tables
+        assert "cases" not in tables
+        # The job row itself is still marked cancelled.
+        assert "analysis_jobs" in tables
 
 
 class TestStaleCleanup:

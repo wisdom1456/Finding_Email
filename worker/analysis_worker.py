@@ -320,25 +320,42 @@ class AnalysisWorker:
             }).eq("id", job_id).eq("status", "running").execute()
 
             if not claim_resp.data:
-                # Job was cancelled (or otherwise mutated) while pipeline ran.
-                # Re-read to confirm, then handle accordingly.
+                # Job was cancelled/superseded while the pipeline ran.
+                # Re-read status + error to log which one won (observability:
+                # every terminal outcome must name its cause — no silent skips).
                 current = self.supabase.table("analysis_jobs").select(
-                    "status"
+                    "status, error"
                 ).eq("id", job_id).execute()
-                current_status = current.data[0]["status"] if current.data else "unknown"
-                logger.info(
-                    f"[JOB:{job_id[:8]}] Finalization skipped — job status is "
-                    f"'{current_status}' (expected 'running'). "
-                    f"Cancel wins; result discarded."
-                )
+                row = current.data[0] if current.data else {}
+                current_status = row.get("status", "unknown")
+                if (row.get("error") or "") == "Superseded by re-run":
+                    logger.info(
+                        f"[JOB:{job_id[:8]}] [FINALIZE] superseded by newer run "
+                        f"(status='{current_status}') — result discarded; new run owns the case"
+                    )
+                else:
+                    logger.info(
+                        f"[JOB:{job_id[:8]}] [FINALIZE] user-cancelled "
+                        f"(status='{current_status}') — result discarded"
+                    )
                 return  # Cancel wins — do not write to analysis_results or cases
 
-            # 3. Write final result to analysis_results (single atomic update)
-            self.supabase.table("analysis_results").update({
+            # 3. Write final result to analysis_results.
+            #    Guard on status='processing': a supersede that landed between
+            #    the CAS above and here reset the (shared, per-case) row to
+            #    'pending' for the NEW run. Writing unconditionally would
+            #    clobber the new run's row with this stale result.
+            res_resp = self.supabase.table("analysis_results").update({
                 "status": "completed",
                 "result": result_dict,
                 "completed_at": datetime.now(timezone.utc).isoformat(),
-            }).eq("id", analysis_id).execute()
+            }).eq("id", analysis_id).eq("status", "processing").execute()
+            if not res_resp.data:
+                logger.warning(
+                    f"[JOB:{job_id[:8]}] [FINALIZE] analysis_results was not 'processing' "
+                    f"at finalization — result NOT written (a re-run reset the row). "
+                    f"Job marked completed; the newer run owns the case result."
+                )
 
             # 4. Update case status
             self.supabase.table("cases").update({
@@ -376,13 +393,35 @@ class AnalysisWorker:
     def _handle_cancel(self, job_id: str, analysis_id: str, case_id: str) -> None:
         """Handle job cancellation.
 
-        Guard: only update analysis_results if still 'processing' (this job's run).
-        A re-run may have already reset the row to 'pending' — don't overwrite it.
-        Only reset case status if no other active job exists for this case
-        (a re-run creates a new job before the old worker detects cancellation).
+        Two distinct causes, handled differently:
+        - Supersede (re-run): the API already reset analysis_results to 'pending'
+          and inserted a NEW job that owns the case. This old worker must touch
+          NOTHING on analysis_results/cases — doing so races the new run and can
+          flip the *new* run's row to 'cancelled', which is the self-cancel loop
+          that caused the original bug.
+        - User cancel: only update analysis_results if still 'processing' (this
+          job's run), and only reset the case if no other active job exists.
         """
-        logger.info(f"[JOB:{job_id[:8]}] Cancelled")
+        superseded = False
+        try:
+            r = self.supabase.table("analysis_jobs").select(
+                "error"
+            ).eq("id", job_id).execute()
+            if r.data and (r.data[0].get("error") or "") == "Superseded by re-run":
+                superseded = True
+        except Exception:
+            pass  # Transient read error — fall through to the safe user-cancel path
+
         self._update_job(job_id, status="cancelled")
+
+        if superseded:
+            logger.info(
+                f"[JOB:{job_id[:8]}] [FINALIZE] superseded by re-run — "
+                f"leaving analysis_results/cases to the new run"
+            )
+            return
+
+        logger.info(f"[JOB:{job_id[:8]}] [FINALIZE] user-cancelled")
         self.supabase.table("analysis_results").update(
             {"status": "cancelled"}
         ).eq("id", analysis_id).eq("status", "processing").execute()
@@ -425,13 +464,23 @@ class AnalysisWorker:
             error=error_msg,
             error_type="terminal",
         )
+        # Guard on 'processing': a re-run may have reset this shared row to
+        # 'pending' for a new run — don't overwrite the new run with this error.
         self.supabase.table("analysis_results").update({
             "status": "error",
             "error": f"{error_msg}\n\n{tb}",
-        }).eq("id", analysis_id).execute()
-        self.supabase.table("cases").update({
-            "status": "error",
-        }).eq("id", case_id).execute()
+        }).eq("id", analysis_id).eq("status", "processing").execute()
+        # Only mark the case errored if no other active job exists for it
+        # (a re-run that may yet succeed must not be masked by this failure).
+        other_active = self.supabase.table("analysis_jobs").select(
+            "id", count="exact"
+        ).eq("case_id", case_id).in_(
+            "status", ["pending", "running"]
+        ).neq("id", job_id).execute()
+        if not other_active.count:
+            self.supabase.table("cases").update({
+                "status": "error",
+            }).eq("id", case_id).execute()
 
     def _update_job(self, job_id: str, **fields: Any) -> None:
         """Update analysis_jobs fields."""

@@ -269,11 +269,12 @@ describe('PollingClient', () => {
 		let callIdx = 0;
 		mockFetch.mockImplementation(() => {
 			callIdx++;
-			// heartbeat_age=60s, 120s, 200s — third call crosses 180s threshold
+			// heartbeat_age=60s, 120s, 200s — third call crosses 180s threshold.
+			// Uses the real API field name (heartbeat_age_seconds).
 			return makeResponse(makeProgressEvent({
 				percent: 25,
 				timestamp: `t${callIdx}`,
-				heartbeat_age: callIdx * 60,
+				heartbeat_age_seconds: callIdx * 60,
 			}));
 		});
 
@@ -303,7 +304,7 @@ describe('PollingClient', () => {
 			return makeResponse(makeProgressEvent({
 				percent: 30, // flat across many polls
 				timestamp: `t${callIdx}`,
-				heartbeat_age: 15, // worker is alive
+				heartbeat_age_seconds: 15, // worker is alive
 			}));
 		});
 

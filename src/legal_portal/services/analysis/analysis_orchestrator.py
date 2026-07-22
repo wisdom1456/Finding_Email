@@ -1429,6 +1429,42 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             f"Processor complete | duration={processor_duration:.1f}s status={result.status}"
         )
 
+        # ------------------------------------------------------------------
+        # POINT OF NO RETURN
+        # ------------------------------------------------------------------
+        # The pipeline produced a valid result. Everything below — persisting
+        # document extractions, generating artifacts, serializing — is the
+        # finalization tail. It used to run with no progress emissions and no
+        # cancel checks, so the UI froze at ~90% and users cancelled, which
+        # discarded a fully-computed result. From here on we do ONE last cancel
+        # check (cheap to honor now), then emit progress via publish_finalizing,
+        # which never raises on cancel so the save always completes.
+        _cancel_before_finalize = False
+        if durable_mode and hasattr(progress_manager, "is_cancelled"):
+            try:
+                _cancel_before_finalize = progress_manager.is_cancelled()
+            except Exception:
+                _cancel_before_finalize = False
+        if not _cancel_before_finalize and _analysis_is_cancelled(supabase, analysis_id):
+            _cancel_before_finalize = True
+        if _cancel_before_finalize:
+            raise AnalysisCancelledError("Analysis cancelled before finalization.")
+
+        async def _emit_finalizing(message: str, percent: int) -> None:
+            """Report finalization-tail progress with no cancel coupling.
+
+            Best-effort: progress must never break finalization, so failures
+            here are logged and swallowed.
+            """
+            try:
+                await progress_manager.publish_finalizing(
+                    channel_id=analysis_id, message=message, percent=percent
+                )
+            except Exception as _fe:
+                logger.warning(f"[BACKGROUND:FINALIZE] progress emit failed: {_fe}")
+
+        await _emit_finalizing("Saving document results…", 92)
+
         # Persist document extraction results to the database
         if result.processed_documents:
             logger.info(
@@ -1458,9 +1494,15 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                         }
                         supabase.table("documents").update(update_data).eq("id", doc.document_id).execute()
 
-                        # Pace writes: yield every 5 docs to avoid I/O spikes
+                        # Pace writes: yield every 5 docs to avoid I/O spikes,
+                        # and keep the progress bar visibly alive during the save.
                         if _doc_idx % 5 == 4:
                             await asyncio.sleep(0.1)
+                            await _emit_finalizing(
+                                f"Saving document results… "
+                                f"({_doc_idx + 1}/{len(result.processed_documents)})",
+                                94,
+                            )
                     except Exception as db_err:
                         logger.warning(
                             f"Failed to persist extraction results for document {doc.document_id}: {db_err}"
@@ -1479,6 +1521,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             f"Generating artifacts | status={result.status}"
         )
 
+        await _emit_finalizing("Generating artifacts…", 95)
         artifacts_meta = _generate_and_store_artifacts(result, case_id, analysis_id, supabase)
         if artifacts_meta:
             result.artifacts = artifacts_meta
@@ -1492,6 +1535,7 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 _pdoc.content = ""
 
         # Convert result to dict for storage (with mode='json' to serialize datetime)
+        await _emit_finalizing("Saving analysis…", 98)
         result_dict = result.model_dump(mode="json")
 
         # Size instrumentation — confirms JSONB payload is bounded

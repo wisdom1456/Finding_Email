@@ -66,6 +66,18 @@
 
 	// Pre-flight validation state
 	let showRerunConfirm = $state(false);
+	// Re-run confirm covers two cases: replacing a completed result, and
+	// interrupting a run that is still going. The latter matters because a run
+	// can sit at ~90% during finalization; without this prompt users cancelled
+	// (discarding completed work) thinking it had hung.
+	let rerunIsActiveRun = $derived(
+		['pending', 'processing'].includes(analysisStatus?.status)
+	);
+	let rerunConfirmMessage = $derived(
+		rerunIsActiveRun
+			? 'An analysis is currently running. Re-running will cancel it and start over. Continue?'
+			: 'This will replace your current analysis results. Do you want to re-run the analysis?'
+	);
 	let showMissingTextWarning = $state(false);
 	let runningBulkOcr = $state(false);
 
@@ -1037,8 +1049,12 @@
 	 * Shows confirmation dialog before overwriting completed results.
 	 */
 	async function runAnalysis(skipMissingTextCheck = false) {
-		// Confirm before overwriting completed results
-		if (analysisStatus?.status === 'completed' && !showRerunConfirm) {
+		// Confirm before overwriting a completed result OR interrupting a run
+		// that is still in progress (see rerunConfirmMessage).
+		if (
+			(analysisStatus?.status === 'completed' || rerunIsActiveRun) &&
+			!showRerunConfirm
+		) {
 			showRerunConfirm = true;
 			return;
 		}
@@ -1876,7 +1892,7 @@
 <ConfirmDialog
 	bind:open={showRerunConfirm}
 	title="Re-run Analysis"
-	message="This will replace your current analysis results. Do you want to re-run the analysis?"
+	message={rerunConfirmMessage}
 	confirmText="Re-run"
 	variant="warning"
 	onConfirm={() => runAnalysis()}

@@ -245,7 +245,10 @@ export class PollingClient {
 			//     false positives there).
 			//   Legacy mode: track percent stagnation across polls.
 			if (this.useHeartbeatStall) {
-				const heartbeatAge = (data as any).heartbeat_age;
+				// The jobs status endpoint returns `heartbeat_age_seconds`; older
+				// callers used `heartbeat_age`. Accept either — without this the
+				// dead-worker check silently never fired (the UI spun forever).
+				const heartbeatAge = (data as any).heartbeat_age_seconds ?? (data as any).heartbeat_age;
 				if (typeof heartbeatAge === 'number' && heartbeatAge >= this.maxHeartbeatStaleSeconds) {
 					console.warn(`Worker heartbeat stale (${heartbeatAge}s) at ${currentPercent}%. Treating as stalled.`);
 					if (this.onMessageHandler) {

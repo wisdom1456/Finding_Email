@@ -77,6 +77,20 @@ class ProgressManager:
         payload_json = json.dumps(payload)
         await self._backend.publish(channel_id, payload_json)
 
+    async def publish_finalizing(self, channel_id: str, message: str, percent: int):
+        """Emit a finalization-tail progress update (legacy/SSE path).
+
+        Mirrors DBProgressManager.publish_finalizing: no cancellation coupling,
+        so the orchestrator can report the 92/95/98 save steps after the
+        point of no return without risking an abort mid-persistence.
+        """
+        await self.publish_progress(
+            channel_id=channel_id,
+            message=message,
+            phase="finalizing",
+            percent=percent,
+        )
+
     async def publish_stage(self, channel_id: str, stage: dict):
         """Publish a stage progress update."""
         await self.publish_progress(

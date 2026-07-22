@@ -32,6 +32,11 @@ _PHASE_TO_STAGE = {
     "issue_mapping": "issue_mapping",
     "deep_analysis": "deep_analysis",
     "gap_analysis": "gap_analysis",
+    # main_processor emits the 80/90% "letter_structure" phase during the
+    # tail; without this mapping it was written verbatim as `stage`, which
+    # violates the analysis_jobs.stage CHECK constraint and the whole progress
+    # UPDATE was silently dropped — the UI froze before ever reaching 90%.
+    "letter_structure": "finalizing",
     "finalizing": "finalizing",
     "completed": "completed",
     "error": "failed",
@@ -89,6 +94,55 @@ class DBProgressManager:
             }).eq("id", self.job_id).execute()
         except Exception as e:
             logger.warning(f"[WORKER] Failed to write progress for job {self.job_id[:8]}: {e}")
+
+    async def publish_finalizing(self, channel_id: str, message: str, percent: int) -> None:
+        """Emit a finalization-tail progress update (point-of-no-return path).
+
+        Deliberately different from publish_progress in two ways:
+        - It NEVER checks cancellation and NEVER raises. Once the pipeline has
+          produced a valid result, the orchestrator has passed the point of no
+          return; a cancel/supersede landing now must not abort the save.
+        - It bypasses the write throttle. Finalization stages are seconds to
+          tens-of-seconds apart, so the throttle would swallow the intermediate
+          92/95/98 updates and reintroduce the frozen-at-90% freeze.
+
+        The write is guarded on status='running' so a job row already flipped to
+        cancelled/completed by the API (or a competing worker) is never mutated
+        by a late finalization write.
+        """
+        payload = {
+            "message": message,
+            "phase": "finalizing",
+            "percent": percent,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            resp = (
+                self.supabase.table("analysis_jobs")
+                .update({"progress": payload, "stage": "finalizing"})
+                .eq("id", self.job_id)
+                .eq("status", "running")
+                .execute()
+            )
+            if not resp.data:
+                logger.info(
+                    f"[WORKER] [FINALIZE] job {self.job_id[:8]} no longer 'running' "
+                    f"— finalization progress not written (percent={percent})"
+                )
+        except Exception as e:
+            logger.warning(
+                f"[WORKER] Failed to write finalizing progress for job {self.job_id[:8]}: {e}"
+            )
+
+    def is_cancelled(self) -> bool:
+        """Public cancellation check (reads analysis_jobs.status).
+
+        Used by the orchestrator for the point-of-no-return check. In durable
+        mode a running-job cancel/supersede sets only analysis_jobs.status, so
+        this is the authoritative signal (analysis_results may still read
+        'processing' or 'pending').
+        """
+        return self._check_cancelled()
 
     async def publish_stage(self, channel_id: str, stage: dict) -> None:
         """Convenience: publish stage update."""

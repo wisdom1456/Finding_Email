@@ -52,6 +52,28 @@ Configure these environment variables in the Vercel Dashboard:
   flag; it only gates frontend rendering in `InlineAnalysisProgress.svelte`
   and `+page.svelte`. An unset flag evaluates as `false` at runtime.
 
+## Supabase Auth Site URL (hosted project) — required for email links
+
+Password recovery, new-user email confirmation, and magic links redirect the
+user to the Supabase project's **Site URL**. This is set in the **hosted**
+project dashboard (**Authentication → URL Configuration**), NOT via the
+`PUBLIC_SUPABASE_*` vars above.
+
+- **Site URL** must be the production app URL
+  (e.g. `https://finding-emails-wisdom1456s-projects.vercel.app`).
+- **Redirect URLs** allowlist must include `<prod-url>/**` so `/auth/callback`
+  (and its `next` target) is permitted.
+
+> ⚠️ **Do not point the hosted Site URL at `localhost`.** If it is localhost,
+> every production recovery/confirmation email links to `localhost` and dies
+> with `ERR_CONNECTION_REFUSED` for the recipient (regular password login still
+> works, so the breakage is silent). This regressed once (2026-07-24).
+>
+> `supabase/config.toml` intentionally keeps `site_url = http://127.0.0.1:3000`
+> for **local** dev. Running `supabase config push` would overwrite the hosted
+> Site URL with that localhost value — so change the hosted Site URL in the
+> dashboard, and avoid `config push` unless `config.toml` is set to prod first.
+
 ## Important Notes
 
 - The `PUBLIC_` prefix makes these variables available on the client-side

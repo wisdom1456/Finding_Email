@@ -85,3 +85,24 @@ def cancel_reason(error: Optional[str]) -> str:
     if not error:
         return "Cancelled."
     return error
+
+
+# ETA baselines, seeded from observed prod runs (Nelson 33 docs≈319s,
+# Martinez 71 docs≈443s → whole-run floor≈211s, ≈3.26 s/doc), apportioned across
+# steps by relative cost. Refining these from history is Phase 2.
+_STEP_FLOOR_SECONDS: dict[int, int] = {1: 20, 2: 40, 3: 40, 4: 20, 5: 60, 6: 31}
+_STEP_SECONDS_PER_DOC: dict[int, float] = {1: 0.2, 2: 1.0, 3: 0.6, 4: 0.2, 5: 1.06, 6: 0.2}
+
+
+def step_estimate(step: int, doc_count: int) -> int:
+    step = max(1, min(STEP_TOTAL, step))
+    docs = max(0, doc_count or 0)
+    return int(round(_STEP_FLOOR_SECONDS[step] + _STEP_SECONDS_PER_DOC[step] * docs))
+
+
+def estimate_eta(*, current_step: int, doc_count: int, elapsed_in_step_seconds: float) -> int:
+    """Whole-run seconds remaining = remainder of current step + all later steps."""
+    current_step = max(1, min(STEP_TOTAL, current_step))
+    remaining_current = max(0, step_estimate(current_step, doc_count) - int(elapsed_in_step_seconds or 0))
+    later = sum(step_estimate(s, doc_count) for s in range(current_step + 1, STEP_TOTAL + 1))
+    return max(0, remaining_current + later)

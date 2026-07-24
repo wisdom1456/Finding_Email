@@ -76,3 +76,36 @@ def test_compute_ui_state_never_raises_on_garbage():
 ])
 def test_cancel_reason(error, expected):
     assert rs.cancel_reason(error) == expected
+
+
+def test_step_estimate_scales_with_docs():
+    small = rs.step_estimate(5, 10)
+    big = rs.step_estimate(5, 71)
+    assert big > small > 0
+
+
+def test_estimate_eta_decreases_as_run_progresses():
+    early = rs.estimate_eta(current_step=1, doc_count=71, elapsed_in_step_seconds=0)
+    late = rs.estimate_eta(current_step=5, doc_count=71, elapsed_in_step_seconds=0)
+    assert early > late
+
+
+def test_estimate_eta_never_negative_when_step_overruns():
+    # current step far over its estimate must not push the total negative
+    eta = rs.estimate_eta(current_step=6, doc_count=1, elapsed_in_step_seconds=99999)
+    assert eta == 0
+
+
+def test_estimate_eta_overrun_current_step_does_not_grow_later_sum():
+    # over-running the current step floors its remainder at 0; later steps unchanged
+    base = rs.estimate_eta(current_step=3, doc_count=71, elapsed_in_step_seconds=0)
+    overrun = rs.estimate_eta(current_step=3, doc_count=71, elapsed_in_step_seconds=100000)
+    assert overrun <= base
+    assert overrun >= 0
+
+
+def test_estimate_eta_ballpark_matches_observed_runs():
+    # seeded from prod: Martinez 71 docs finished ~443s. Whole-run estimate at start
+    # should be within a sane band (not off by an order of magnitude).
+    eta = rs.estimate_eta(current_step=1, doc_count=71, elapsed_in_step_seconds=0)
+    assert 250 <= eta <= 900

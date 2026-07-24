@@ -61,7 +61,12 @@ mutually exclusive by construction and every input resolves to exactly one.
 | `stalled` | latest job `running`, `heartbeat_age_seconds` ≥ 180 | ⚠️ worker unresponsive + **Start over** |
 | `completed` | latest job `completed`, or a persisted result exists | View results + **Re-run** |
 | `failed` | latest job `failed` | error detail + **Start over** |
-| `cancelled` | latest job `cancelled` | **Start analysis** |
+| `cancelled` | latest job `cancelled` | reason line + **Start analysis** |
+
+In `cancelled`, show a one-line reason derived from `analysis_jobs.error`:
+`"Superseded by re-run"` → *"Replaced by a newer run."*; a plain user cancel
+(`error IS NULL`) → *"Cancelled."*; any other non-null error → that text verbatim.
+This keeps a cancelled run from looking like a silent stop.
 
 Ordering rationale: active states (`queued`/`running`/`stalled`) are checked before
 terminal ones so a newly-started run is never masked by the previous run's outcome —
@@ -140,24 +145,36 @@ accepts a `stats` kwarg and writes it into the progress JSON
 `"Batch 1 complete (12/12 docs summarized)"`). Stages without a natural item count
 simply omit them — no fabricated denominators.
 
-### 3.4 ETA
+### 3.4 ETA — per remaining step
 
-Deliberately simple and clearly labelled an estimate:
+`eta_seconds` is the estimate to finish the whole run, but it is **built by summing
+per-step estimates** rather than treating the run as one blob — so it stays accurate
+as the run moves through cheap and expensive steps, and the same per-step numbers
+drive the "this step takes several minutes" copy.
+
+A constant table gives each of the 6 steps a `seconds_per_doc` (and a small fixed
+floor for steps whose cost is roughly doc-independent, e.g. finalizing):
 
 ```
-eta_seconds = max(0, (Σ remaining_steps baseline_seconds_per_doc × doc_count) − elapsed_in_step)
+step_estimate(step)  = floor_seconds[step] + seconds_per_doc[step] × doc_count
+eta_seconds          = max(0,
+                           (step_estimate(current) − elapsed_in_current_step)   // finish current step
+                         + Σ step_estimate(s) for s in steps after current)      // all later steps
 ```
 
-with a small constant table of per-step seconds/doc seeded from observed runs
-(Nelson 33 docs = 319s; Martinez 71 docs = 443s).
+Baselines seeded from observed runs (Nelson 33 docs = 319s total; Martinez 71 docs =
+443s total), apportioned across steps using their known relative cost
+(`deep_analysis` and summarization dominate; issue-mapping and finalizing are short).
 
 Guards:
-- Never render a countdown that hits 0 and sticks — past the estimate, show
-  **"almost done"**.
+- Never render a countdown that hits 0 and sticks — once `eta_seconds` reaches 0 or
+  the run is in the final step past its estimate, show **"almost done"**.
 - Never render an ETA in `stalled`.
 - Round to a coarse unit (`~6 min`), never `5m 43s` — false precision erodes trust.
+- The current-step remainder is floored at 0 so an over-running step never makes the
+  later-steps sum go backwards.
 
-Refining the baselines from historical job durations is **Phase 2**.
+Refining the per-step baselines from historical job durations is **Phase 2**.
 
 ### 3.5 What is NOT changing
 
@@ -174,7 +191,7 @@ Refining the baselines from historical job durations is **Phase 2**.
 |---|---|
 | `src/legal_portal/api/routes/progress.py` | add `ui_state`, `step_*`, `items_*`, `eta_seconds`, `healthy` to the job status response |
 | `src/legal_portal/api/routes/analysis_core.py` | add `ui_state` to `GET /status/{case_id}` (derive from latest job) |
-| `src/legal_portal/core/analysis_state.py` *(or new `run_state.py`)* | `STAGE_TO_STEP` map, `compute_ui_state()`, `estimate_eta()` — pure functions, unit-testable |
+| `src/legal_portal/core/analysis_state.py` *(or new `run_state.py`)* | `STAGE_TO_STEP` map, `compute_ui_state()`, `estimate_eta()`, `cancel_reason()` — pure functions, unit-testable |
 | `src/legal_portal/services/analysis/main_processor.py`, `multi_stage_analyzer.py` | pass `stats={items_done, items_total}` where a count exists |
 | `frontend/src/lib/stores/progressStore.ts` | replace `DEFAULT_STAGES` ids with the canonical 6; carry new fields |
 | `frontend/src/lib/utils/pollingClient.ts` | pass new fields through (stall logic unchanged) |
@@ -199,7 +216,10 @@ Refining the baselines from historical job durations is **Phase 2**.
 - `STAGE_TO_STEP` — every one of the 11 CHECK-allowed stage values maps to a step or
   an explicit terminal. *A stage value with no mapping is a test failure* (guards P3
   from regressing).
-- `estimate_eta()` — monotonic decrease, never negative, omitted when inputs missing.
+- `estimate_eta()` — never negative; the later-steps sum never grows when the current
+  step over-runs (current-step remainder floored at 0); omitted when inputs missing.
+- `cancel_reason()` — `"Superseded by re-run"` → replaced-copy; `NULL` → cancelled-copy;
+  other → verbatim.
 - Status endpoints return the new fields for a running job.
 
 **Frontend (vitest)**
@@ -220,12 +240,12 @@ purely additive and ship unflagged — new fields are ignored by the current UI,
 there is no coupled deploy. Flag on in preview → verify on a history-bearing case →
 flag on in prod. Rollback is a flag flip, not a revert.
 
-## 8. Open questions
+## 8. Resolved decisions
 
-- Should `cancelled` show *why* (user vs superseded)? The data exists
-  (`analysis_jobs.error`). Leaning yes, one line, low cost.
-- Per-step ETA vs whole-run ETA — starting with whole-run; revisit if it reads poorly
-  on 71-doc cases.
+- **Cancelled shows why** (§3.1): one line derived from `analysis_jobs.error` —
+  superseded vs user-cancel vs other. Approved.
+- **ETA is built per-step** (§3.4), summed to a whole-run number, rather than a single
+  blob estimate. Approved.
 
 ## 9. Phase 2 (not this spec)
 

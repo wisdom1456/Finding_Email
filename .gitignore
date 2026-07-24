@@ -219,6 +219,9 @@ validation_output/
 # Local testing snapshots (contain real case data)
 scripts/snapshots/
 
+# Ad-hoc debugging scripts + generated client letters (contain real case data / PII)
+scripts/output/
+
 # Generated outputs
 output/letters/
 output/summaries/

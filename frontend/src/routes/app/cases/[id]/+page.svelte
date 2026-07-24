@@ -92,7 +92,6 @@
 	// (progressStore, Task 3's polled job status), that live value wins —
 	// it updates every poll tick and is fresher than the REST snapshot.
 	let restUiState = $state<string | null>(null);
-	let restError = $state<string | null>(null);
 	let restCancelReason = $state<string | null>(null);
 	let controls = $derived(controlsFor($progressStore.uiState ?? restUiState ?? 'idle'));
 	// Fix 1 (G1, flag-gated): `controls` above falls back to 'idle' (which
@@ -504,7 +503,6 @@
 			if (!resp.ok) return; // includes 404 "no analysis yet" — leave restUiState as-is
 			const data = await resp.json();
 			restUiState = data.ui_state ?? null;
-			restError = data.error ?? null;
 			restCancelReason = data.cancel_reason ?? null;
 		} catch (e) {
 			console.error('[trustworthyWait] Failed to refresh ui_state:', e);

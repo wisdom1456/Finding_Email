@@ -18,3 +18,22 @@ def test_ui_state_completed_when_no_active_job_but_result_present():
 
 def test_ui_state_idle_when_nothing():
     assert ac._ui_state_for_case(latest_job=None, result_status=None, heartbeat_age=None) == "idle"
+
+
+def test_cancel_reason_maps_supersede_to_friendly_copy():
+    job = {"status": "cancelled", "error": "Superseded by re-run"}
+    assert ac._cancel_reason_for_case(latest_job=job, ui_state="cancelled") == "Replaced by a newer run."
+
+
+def test_cancel_reason_none_error_falls_back_to_cancelled():
+    job = {"status": "cancelled", "error": None}
+    assert ac._cancel_reason_for_case(latest_job=job, ui_state="cancelled") == "Cancelled."
+
+
+def test_cancel_reason_none_when_not_cancelled():
+    job = {"status": "running", "error": None}
+    assert ac._cancel_reason_for_case(latest_job=job, ui_state="running") is None
+
+
+def test_cancel_reason_handles_missing_job():
+    assert ac._cancel_reason_for_case(latest_job=None, ui_state="cancelled") == "Cancelled."

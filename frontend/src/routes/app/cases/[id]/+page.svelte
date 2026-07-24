@@ -93,7 +93,18 @@
 	// it updates every poll tick and is fresher than the REST snapshot.
 	let restUiState = $state<string | null>(null);
 	let restError = $state<string | null>(null);
+	let restCancelReason = $state<string | null>(null);
 	let controls = $derived(controlsFor($progressStore.uiState ?? restUiState ?? 'idle'));
+	// Fix 1 (G1, flag-gated): `controls` above falls back to 'idle' (which
+	// permits Start) whenever neither the REST snapshot nor the live progress
+	// store has resolved yet — e.g. the instant after mount/reload, before
+	// refreshUiState()'s fetch returns. uiStateResolved flips true once that
+	// fetch settles (success, 404, or error — see refreshUiState's finally),
+	// and a connected progress store counts as resolved too. Every Start/
+	// Re-run trigger in the flag-on branch must also require this before
+	// rendering, so a live run's Start button can never flash into the DOM.
+	let uiStateResolved = $state(false);
+	let analysisStateReady = $derived($progressStore.uiState !== undefined || uiStateResolved);
 	let showMissingTextWarning = $state(false);
 	let runningBulkOcr = $state(false);
 
@@ -494,8 +505,15 @@
 			const data = await resp.json();
 			restUiState = data.ui_state ?? null;
 			restError = data.error ?? null;
+			restCancelReason = data.cancel_reason ?? null;
 		} catch (e) {
 			console.error('[trustworthyWait] Failed to refresh ui_state:', e);
+		} finally {
+			// Fix 1 (G1): flips true on every settle path (success, 404, error)
+			// so `analysisStateReady` becomes true even when there's no analysis
+			// yet or the fetch failed — the Start button is then allowed to
+			// render from the resolved (fallback 'idle') state, not a guess.
+			uiStateResolved = true;
 		}
 	}
 
@@ -1687,7 +1705,7 @@
 										</p>
 									</div>
 								</div>
-								{#if !trustworthyWait || ((controls.start || controls.rerun) && !analyzing)}
+								{#if !trustworthyWait || ((controls.start || controls.rerun) && !analyzing && analysisStateReady)}
 								<AsyncButton
 									onclick={() => runAnalysis()}
 									loading={showStreamingPanel || analyzing}
@@ -1720,7 +1738,7 @@
 									>
 										Back to Analysis Controls
 									</AsyncButton>
-									{#if !trustworthyWait || controls.rerun}
+									{#if !trustworthyWait || (controls.rerun && analysisStateReady)}
 									<AsyncButton
 										onclick={() => {
 											showingEmbeddedResults = false;
@@ -1766,7 +1784,7 @@
 												Start Over
 											</AsyncButton>
 										{/if}
-										{#if (controls.start || controls.rerun) && !analyzing}
+										{#if (controls.start || controls.rerun) && !analyzing && analysisStateReady}
 											<AsyncButton
 												onclick={() => runAnalysis()}
 												loading={analyzing}
@@ -1799,8 +1817,8 @@
 						</dd>
 					</div>
 
-					{#if restUiState === 'cancelled'}
-						<p class="text-xs text-gray-500">{restError ?? 'Cancelled.'}</p>
+					{#if ($progressStore.uiState ?? restUiState) === 'cancelled'}
+						<p class="text-xs text-gray-500">{$progressStore.cancelReason ?? restCancelReason ?? 'Cancelled.'}</p>
 					{/if}
 
 					{#if controls.viewResults && analysisStatus.status === 'completed' && analysisStatus.result}

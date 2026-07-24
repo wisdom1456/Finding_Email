@@ -566,6 +566,19 @@ def _ui_state_for_case(*, latest_job: Optional[dict], result_status: Optional[st
     )
 
 
+def _cancel_reason_for_case(*, latest_job: Optional[dict], ui_state: str) -> Optional[str]:
+    """Pure: friendly cancel_reason for a case's status response.
+
+    Only populated when ui_state == 'cancelled'. The friendly mapping
+    (run_state.cancel_reason) needs the raw supersede text, which lives on
+    analysis_jobs.error — not analysis_results.error.
+    """
+    if ui_state != "cancelled":
+        return None
+    error = latest_job.get("error") if latest_job else None
+    return run_state.cancel_reason(error)
+
+
 @router.get("/status/{case_id}", response_model=AnalysisResponse)
 async def get_analysis_status(
     case_id: str,
@@ -604,7 +617,7 @@ async def get_analysis_status(
         try:
             latest_job_resp = (
                 supabase.table("analysis_jobs")
-                .select("status, stage, heartbeat_at")
+                .select("status, stage, heartbeat_at, error")
                 .eq("case_id", case_id)
                 .order("created_at", desc=True)
                 .limit(1)
@@ -627,6 +640,14 @@ async def get_analysis_status(
             row["ui_state"] = _ui_state_for_case(
                 latest_job=latest_job, result_status=row.get("status"), heartbeat_age=heartbeat_age,
             )
+            # cancel_reason is a best-effort enhancement — same failure posture
+            # as ui_state above: never take down the status response.
+            try:
+                row["cancel_reason"] = _cancel_reason_for_case(
+                    latest_job=latest_job, ui_state=row["ui_state"],
+                )
+            except Exception:
+                row["cancel_reason"] = None
             return row
 
         # Check for active job first (pending/running)

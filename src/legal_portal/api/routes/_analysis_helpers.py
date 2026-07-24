@@ -202,6 +202,7 @@ class AnalysisResponse(BaseModel):
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     ui_state: Optional[str] = None
+    cancel_reason: Optional[str] = None
 
 
 class LetterGenerationRequest(BaseModel):

@@ -2,8 +2,16 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { writable } from 'svelte/store';
 	import { Loader2, CheckCircle, Circle, XCircle, X } from 'lucide-svelte';
+	import { env } from '$env/dynamic/public';
 	import { progressStore } from '$lib/stores/progressStore';
 	import type { EnhancedProgressState } from '$lib/stores/progressStore';
+	import { formatEta, livenessLine, substanceLine } from '$lib/utils/waitDisplay';
+
+	// Trustworthy-Wait line (Task 7): gated behind a flag so the default
+	// experience is byte-for-byte unchanged. Matches the PUBLIC_ env
+	// accessor pattern used elsewhere in the app (see +page.svelte for
+	// [id] cases, VerificationHub.svelte).
+	const trustworthyWait = env.PUBLIC_ENABLE_TRUSTWORTHY_WAIT === 'true';
 
 	let {
 		analysisId,
@@ -161,6 +169,24 @@
 			</button>
 		{/if}
 	</div>
+
+	<!-- Trustworthy-Wait line: step / substance / eta / liveness.
+	     Flag-gated and only rendered for an explicitly active run so
+	     older ticks (uiState undefined) or terminal states never show it. -->
+	{#if trustworthyWait && (state.uiState === 'running' || state.uiState === 'queued')}
+		<div class="mb-4 space-y-0.5">
+			<p class="tw-step text-sm font-medium text-contrast">
+				Step {state.stepIndex} of {state.stepTotal} · {state.stepLabel}
+			</p>
+			<p class="tw-substance text-xs text-gray-500">
+				{substanceLine(state.itemsDone, state.itemsTotal, state.stepIndex)}
+				{#if formatEta(state.etaSeconds)} · {formatEta(state.etaSeconds)}{/if}
+			</p>
+			<p class="tw-liveness text-xs text-gray-400">
+				{livenessLine(state.healthy, null)}
+			</p>
+		</div>
+	{/if}
 
 	<!-- Progress Bar -->
 	<div class="mb-4">

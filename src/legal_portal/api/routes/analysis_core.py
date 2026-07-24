@@ -27,6 +27,7 @@ from legal_portal.api.routes._analysis_helpers import (
     _update_case_with_retry,
     _upsert_with_retry,
 )
+from legal_portal.core import run_state
 
 # Import orchestration logic from service layer
 from legal_portal.services.analysis.analysis_orchestrator import (
@@ -554,6 +555,17 @@ async def cancel_case_analysis(
         ) from e
 
 
+def _ui_state_for_case(*, latest_job: Optional[dict], result_status: Optional[str], heartbeat_age) -> str:
+    """Pure: derive the frontend ui_state for a case's status response.
+
+    Active job state wins over a stale/completed result row.
+    """
+    has_result = result_status == "completed"
+    return run_state.compute_ui_state(
+        job=latest_job, has_result=has_result, heartbeat_age_seconds=heartbeat_age,
+    )
+
+
 @router.get("/status/{case_id}", response_model=AnalysisResponse)
 async def get_analysis_status(
     case_id: str,
@@ -582,6 +594,35 @@ async def get_analysis_status(
         if not case_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
+        # Load the case's latest analysis job (drives ui_state; independent of
+        # which analysis_results row ends up being returned below).
+        latest_job_resp = (
+            supabase.table("analysis_jobs")
+            .select("status, stage, heartbeat_at")
+            .eq("case_id", case_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        latest_job = latest_job_resp.data[0] if latest_job_resp.data else None
+        heartbeat_age = None
+        if latest_job and latest_job.get("heartbeat_at"):
+            try:
+                from dateutil.parser import parse as parse_dt
+
+                hb_time = parse_dt(latest_job["heartbeat_at"])
+                now = datetime.utcnow().replace(tzinfo=timezone.utc) if hb_time.tzinfo else datetime.utcnow()
+                heartbeat_age = (now - hb_time).total_seconds()
+            except Exception:
+                heartbeat_age = None
+
+        def _with_ui_state(row: dict) -> dict:
+            row = dict(row)
+            row["ui_state"] = _ui_state_for_case(
+                latest_job=latest_job, result_status=row.get("status"), heartbeat_age=heartbeat_age,
+            )
+            return row
+
         # Check for active job first (pending/running)
         active_response = (
             supabase.table("analysis_results")
@@ -593,7 +634,7 @@ async def get_analysis_status(
             .execute()
         )
         if active_response.data:
-            return active_response.data[0]
+            return _with_ui_state(active_response.data[0])
 
         # Prefer latest completed analysis
         completed_response = (
@@ -606,7 +647,7 @@ async def get_analysis_status(
             .execute()
         )
         if completed_response.data:
-            return completed_response.data[0]
+            return _with_ui_state(completed_response.data[0])
 
         # Fall back to latest of any status (error, cancelled, etc.)
         response = (
@@ -623,7 +664,7 @@ async def get_analysis_status(
                 status_code=status.HTTP_404_NOT_FOUND, detail="No analysis found for this case"
             )
 
-        return response.data[0]
+        return _with_ui_state(response.data[0])
     except HTTPException:
         raise
     except Exception as e:

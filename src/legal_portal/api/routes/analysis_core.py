@@ -596,25 +596,31 @@ async def get_analysis_status(
 
         # Load the case's latest analysis job (drives ui_state; independent of
         # which analysis_results row ends up being returned below).
-        latest_job_resp = (
-            supabase.table("analysis_jobs")
-            .select("status, stage, heartbeat_at")
-            .eq("case_id", case_id)
-            .order("created_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        latest_job = latest_job_resp.data[0] if latest_job_resp.data else None
+        # ui_state is a best-effort enhancement — a failure here (RLS,
+        # transient DB error) must never take down the status response, which
+        # only depends on analysis_results.
+        latest_job = None
         heartbeat_age = None
-        if latest_job and latest_job.get("heartbeat_at"):
-            try:
+        try:
+            latest_job_resp = (
+                supabase.table("analysis_jobs")
+                .select("status, stage, heartbeat_at")
+                .eq("case_id", case_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            latest_job = latest_job_resp.data[0] if latest_job_resp.data else None
+            if latest_job and latest_job.get("heartbeat_at"):
                 from dateutil.parser import parse as parse_dt
 
                 hb_time = parse_dt(latest_job["heartbeat_at"])
                 now = datetime.utcnow().replace(tzinfo=timezone.utc) if hb_time.tzinfo else datetime.utcnow()
                 heartbeat_age = (now - hb_time).total_seconds()
-            except Exception:
-                heartbeat_age = None
+        except Exception as job_err:
+            logger.warning(f"Failed to load latest analysis_jobs row for case {case_id}: {job_err}")
+            latest_job = None
+            heartbeat_age = None
 
         def _with_ui_state(row: dict) -> dict:
             row = dict(row)

@@ -138,13 +138,13 @@ describe('progressStore', () => {
 		progressStore.updateProgress({
 			type: 'progress',
 			message: 'Working',
-			phase: 'doc_analysis',
+			phase: 'analyzing',
 			percent: 20,
-			stage: { id: 'doc_analysis', name: 'Document Analysis', status: 'active', progress: 50 },
+			stage: { id: 'analyzing', name: 'Analyzing documents', status: 'active', progress: 50 },
 		});
 
 		const state = get(progressStore);
-		const stage = state.stages.find(s => s.id === 'doc_analysis');
+		const stage = state.stages.find(s => s.id === 'analyzing');
 		expect(stage?.status).toBe('active');
 		expect(stage?.progress).toBe(50);
 	});
@@ -349,18 +349,18 @@ describe('progressStore', () => {
 		// Test the updateProgress behavior accurately:
 		progressStore.updateProgress({
 			type: 'progress', message: '', phase: '', percent: 40,
-			stage: { id: 'legal_mapping', name: 'Legal Issues', status: 'active', progress: 0 },
+			stage: { id: 'issue_mapping', name: 'Mapping legal issues', status: 'active', progress: 0 },
 		});
 
 		const state = get(progressStore);
-		const legalMapping = state.stages.find(s => s.id === 'legal_mapping');
+		const issueMapping = state.stages.find(s => s.id === 'issue_mapping');
 
 		// The target stage IS updated
-		expect(legalMapping?.status).toBe('active');
+		expect(issueMapping?.status).toBe('active');
 
 		// Previous stages are NOT cascaded in updateProgress (only in SSE path)
-		const docAnalysis = state.stages.find(s => s.id === 'doc_analysis');
-		expect(docAnalysis?.status).toBe('pending');
+		const analyzing = state.stages.find(s => s.id === 'analyzing');
+		expect(analyzing?.status).toBe('pending');
 	});
 
 	// ── isSupported ──

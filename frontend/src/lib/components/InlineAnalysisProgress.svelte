@@ -209,7 +209,7 @@
 						</span>
 					{/if}
 				</div>
-				{#if stage.id === 'doc_analysis' && stage.status === 'active' && state.current_doc}
+				{#if stage.id === 'analyzing' && stage.status === 'active' && state.current_doc}
 					<div class="text-xs text-gray-400 ml-7 mt-0.5">
 						{state.current_doc.name} ({state.current_doc.index}/{state.current_doc.total})
 					</div>

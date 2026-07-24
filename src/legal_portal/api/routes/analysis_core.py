@@ -27,6 +27,7 @@ from legal_portal.api.routes._analysis_helpers import (
     _update_case_with_retry,
     _upsert_with_retry,
 )
+from legal_portal.core import run_state
 
 # Import orchestration logic from service layer
 from legal_portal.services.analysis.analysis_orchestrator import (
@@ -554,6 +555,30 @@ async def cancel_case_analysis(
         ) from e
 
 
+def _ui_state_for_case(*, latest_job: Optional[dict], result_status: Optional[str], heartbeat_age) -> str:
+    """Pure: derive the frontend ui_state for a case's status response.
+
+    Active job state wins over a stale/completed result row.
+    """
+    has_result = result_status == "completed"
+    return run_state.compute_ui_state(
+        job=latest_job, has_result=has_result, heartbeat_age_seconds=heartbeat_age,
+    )
+
+
+def _cancel_reason_for_case(*, latest_job: Optional[dict], ui_state: str) -> Optional[str]:
+    """Pure: friendly cancel_reason for a case's status response.
+
+    Only populated when ui_state == 'cancelled'. The friendly mapping
+    (run_state.cancel_reason) needs the raw supersede text, which lives on
+    analysis_jobs.error — not analysis_results.error.
+    """
+    if ui_state != "cancelled":
+        return None
+    error = latest_job.get("error") if latest_job else None
+    return run_state.cancel_reason(error)
+
+
 @router.get("/status/{case_id}", response_model=AnalysisResponse)
 async def get_analysis_status(
     case_id: str,
@@ -582,6 +607,49 @@ async def get_analysis_status(
         if not case_response.data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
 
+        # Load the case's latest analysis job (drives ui_state; independent of
+        # which analysis_results row ends up being returned below).
+        # ui_state is a best-effort enhancement — a failure here (RLS,
+        # transient DB error) must never take down the status response, which
+        # only depends on analysis_results.
+        latest_job = None
+        heartbeat_age = None
+        try:
+            latest_job_resp = (
+                supabase.table("analysis_jobs")
+                .select("status, stage, heartbeat_at, error")
+                .eq("case_id", case_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            latest_job = latest_job_resp.data[0] if latest_job_resp.data else None
+            if latest_job and latest_job.get("heartbeat_at"):
+                from dateutil.parser import parse as parse_dt
+
+                hb_time = parse_dt(latest_job["heartbeat_at"])
+                now = datetime.utcnow().replace(tzinfo=timezone.utc) if hb_time.tzinfo else datetime.utcnow()
+                heartbeat_age = (now - hb_time).total_seconds()
+        except Exception as job_err:
+            logger.warning(f"Failed to load latest analysis_jobs row for case {case_id}: {job_err}")
+            latest_job = None
+            heartbeat_age = None
+
+        def _with_ui_state(row: dict) -> dict:
+            row = dict(row)
+            row["ui_state"] = _ui_state_for_case(
+                latest_job=latest_job, result_status=row.get("status"), heartbeat_age=heartbeat_age,
+            )
+            # cancel_reason is a best-effort enhancement — same failure posture
+            # as ui_state above: never take down the status response.
+            try:
+                row["cancel_reason"] = _cancel_reason_for_case(
+                    latest_job=latest_job, ui_state=row["ui_state"],
+                )
+            except Exception:
+                row["cancel_reason"] = None
+            return row
+
         # Check for active job first (pending/running)
         active_response = (
             supabase.table("analysis_results")
@@ -593,7 +661,7 @@ async def get_analysis_status(
             .execute()
         )
         if active_response.data:
-            return active_response.data[0]
+            return _with_ui_state(active_response.data[0])
 
         # Prefer latest completed analysis
         completed_response = (
@@ -606,7 +674,7 @@ async def get_analysis_status(
             .execute()
         )
         if completed_response.data:
-            return completed_response.data[0]
+            return _with_ui_state(completed_response.data[0])
 
         # Fall back to latest of any status (error, cancelled, etc.)
         response = (
@@ -623,7 +691,7 @@ async def get_analysis_status(
                 status_code=status.HTTP_404_NOT_FOUND, detail="No analysis found for this case"
             )
 
-        return response.data[0]
+        return _with_ui_state(response.data[0])
     except HTTPException:
         raise
     except Exception as e:

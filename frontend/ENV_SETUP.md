@@ -44,6 +44,13 @@ Configure these environment variables in the Vercel Dashboard:
   silently skip a window of documents. An unset flag evaluates as `false` at
   runtime. Enable in a Vercel **preview** and verify a real case before turning
   it on in **production**.
+- `PUBLIC_ENABLE_TRUSTWORTHY_WAIT` — **default off.** When `true`, gates the
+  Trustworthy Wait Phase 1 UI: no Start button while a run is active (Cancel
+  only), an honest per-step progress line (1→6) with per-step ETA, and a
+  visible cancellation reason. Backend status fields (`ui_state`, `step_*`,
+  `items_*`, `eta_seconds`, `healthy`, `cancel_reason`) ship regardless of this
+  flag; it only gates frontend rendering in `InlineAnalysisProgress.svelte`
+  and `+page.svelte`. An unset flag evaluates as `false` at runtime.
 
 ## Important Notes
 

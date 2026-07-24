@@ -38,6 +38,13 @@
 	import { formatDate, formatFileSize, getStatusColor } from '$lib/utils/formatters';
 	import { shouldAutoExtract, docNeedsExtraction } from '$lib/utils/autoExtract';
 	import { runCoverageLoop } from '$lib/utils/bulkExtractLoop';
+	import { controlsFor } from './caseControls';
+
+	// Trustworthy-Wait (Task 8): ui_state-driven controls so no button can
+	// restart a healthy in-flight run (G1). Matches the PUBLIC_ env accessor
+	// pattern used elsewhere (see InlineAnalysisProgress.svelte). Flag off =
+	// this page's existing rendering/logic is completely unchanged.
+	const trustworthyWait = env.PUBLIC_ENABLE_TRUSTWORTHY_WAIT === 'true';
 
 	let caseData = $state<CaseData | null>(null);
 	let documents = $state<any[]>([]);
@@ -78,6 +85,25 @@
 			? 'An analysis is currently running. Re-running will cancel it and start over. Continue?'
 			: 'This will replace your current analysis results. Do you want to re-run the analysis?'
 	);
+
+	// Trustworthy-Wait (Task 8, flag-gated): ui_state sourced from GET
+	// /api/analysis/status/{case_id} (Task 4), refreshed alongside
+	// loadAnalysisStatus(). While a run is actively being tracked on this page
+	// (progressStore, Task 3's polled job status), that live value wins —
+	// it updates every poll tick and is fresher than the REST snapshot.
+	let restUiState = $state<string | null>(null);
+	let restCancelReason = $state<string | null>(null);
+	let controls = $derived(controlsFor($progressStore.uiState ?? restUiState ?? 'idle'));
+	// Fix 1 (G1, flag-gated): `controls` above falls back to 'idle' (which
+	// permits Start) whenever neither the REST snapshot nor the live progress
+	// store has resolved yet — e.g. the instant after mount/reload, before
+	// refreshUiState()'s fetch returns. uiStateResolved flips true once that
+	// fetch settles (success, 404, or error — see refreshUiState's finally),
+	// and a connected progress store counts as resolved too. Every Start/
+	// Re-run trigger in the flag-on branch must also require this before
+	// rendering, so a live run's Start button can never flash into the DOM.
+	let uiStateResolved = $state(false);
+	let analysisStateReady = $derived($progressStore.uiState !== undefined || uiStateResolved);
 	let showMissingTextWarning = $state(false);
 	let runningBulkOcr = $state(false);
 
@@ -453,6 +479,39 @@
 		} catch (error: any) {
 			console.error('Failed to load analysis status:', error);
 			analysisStatus = null;
+		}
+		// Trustworthy-Wait (Task 8): additive REST fetch for ui_state, flag-gated
+		// and self-contained — never throws, never touches analysisStatus above.
+		if (trustworthyWait) {
+			await refreshUiState();
+		}
+	}
+
+	// Trustworthy-Wait (Task 8, flag-gated only): pull ui_state from the
+	// /api/analysis/status/{case_id} endpoint (Task 4) so `controls` reflects
+	// reality even before the durable-job poller (progressStore) connects —
+	// e.g. right after a page reload mid-run. Best-effort: any failure here
+	// leaves restUiState untouched and controls falls back to 'idle'.
+	async function refreshUiState() {
+		try {
+			const { session } = await getSecureSession();
+			if (!session) return;
+			const apiUrl = getApiUrl();
+			const resp = await fetch(`${apiUrl}/api/analysis/status/${caseId}`, {
+				headers: { Authorization: `Bearer ${session.access_token}` }
+			});
+			if (!resp.ok) return; // includes 404 "no analysis yet" — leave restUiState as-is
+			const data = await resp.json();
+			restUiState = data.ui_state ?? null;
+			restCancelReason = data.cancel_reason ?? null;
+		} catch (e) {
+			console.error('[trustworthyWait] Failed to refresh ui_state:', e);
+		} finally {
+			// Fix 1 (G1): flips true on every settle path (success, 404, error)
+			// so `analysisStateReady` becomes true even when there's no analysis
+			// yet or the fetch failed — the Start button is then allowed to
+			// render from the resolved (fallback 'idle') state, not a guess.
+			uiStateResolved = true;
 		}
 	}
 
@@ -1644,6 +1703,7 @@
 										</p>
 									</div>
 								</div>
+								{#if !trustworthyWait || ((controls.start || controls.rerun) && !analyzing && analysisStateReady)}
 								<AsyncButton
 									onclick={() => runAnalysis()}
 									loading={showStreamingPanel || analyzing}
@@ -1652,6 +1712,7 @@
 								>
 									Re-run Analysis
 								</AsyncButton>
+								{/if}
 							</div>
 						</div>
 					{/if}
@@ -1675,6 +1736,7 @@
 									>
 										Back to Analysis Controls
 									</AsyncButton>
+									{#if !trustworthyWait || (controls.rerun && analysisStateReady)}
 									<AsyncButton
 										onclick={() => {
 											showingEmbeddedResults = false;
@@ -1686,23 +1748,20 @@
 									>
 										Run New Analysis
 									</AsyncButton>
+									{/if}
 								</div>
 							</div>
 						{:else}
+						{#if trustworthyWait}
+						<!-- Trustworthy-Wait (Task 8): controls rendered from ui_state — G1
+						     guarantee: no Start/Re-run button exists in the DOM while
+						     controls.start/controls.rerun are false (queued/running/stalled). -->
 						<div class="card-standard">
 							<div class="flex justify-between items-center mb-6">
 								<h3 class="text-lg font-heading font-semibold text-contrast">Analysis</h3>
 								{#if documents.length > 0 && !showProgressModal}
 									<div class="flex items-center gap-2">
-										{#if analysisStatus?.status === 'processing'}
-											<AsyncButton
-												onclick={resumeProcessingAnalysis}
-												loading={false}
-												variant="primary"
-												title="Check if the server completed the analysis"
-											>
-												Resume
-											</AsyncButton>
+										{#if controls.cancel}
 											<AsyncButton
 												onclick={cancelAnalysis}
 												loading={false}
@@ -1712,19 +1771,31 @@
 												Cancel
 											</AsyncButton>
 										{/if}
-
-										<AsyncButton
-											onclick={() => runAnalysis()}
-											loading={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
-											variant="primary"
-											loadingText="Analyzing..."
-										>
-											{#if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
-												Run New Analysis
-											{:else}
-												Start Analysis
-											{/if}
-										</AsyncButton>
+										{#if controls.startOver}
+											<AsyncButton
+												onclick={() => runAnalysis()}
+												loading={analyzing}
+												variant="primary"
+												loadingText="Starting..."
+												title="Start a new analysis run"
+											>
+												Start Over
+											</AsyncButton>
+										{/if}
+										{#if (controls.start || controls.rerun) && !analyzing && analysisStateReady}
+											<AsyncButton
+												onclick={() => runAnalysis()}
+												loading={analyzing}
+												variant="primary"
+												loadingText="Analyzing..."
+											>
+												{#if controls.rerun}
+													Run New Analysis
+												{:else}
+													Start Analysis
+												{/if}
+											</AsyncButton>
+										{/if}
 									</div>
 								{/if}
 							</div>
@@ -1744,7 +1815,11 @@
 						</dd>
 					</div>
 
-					{#if analysisStatus.status === 'completed' && analysisStatus.result}
+					{#if ($progressStore.uiState ?? restUiState) === 'cancelled'}
+						<p class="text-xs text-gray-500">{$progressStore.cancelReason ?? restCancelReason ?? 'Cancelled.'}</p>
+					{/if}
+
+					{#if controls.viewResults && analysisStatus.status === 'completed' && analysisStatus.result}
 						<div class="flex items-center space-x-3">
 							<AsyncButton
 								onclick={async () => {
@@ -1763,6 +1838,7 @@
 							</svg>
 								Open Results Workspace
 							</AsyncButton>
+					{#if controls.rerun}
 					<AsyncButton
 						onclick={() => runAnalysis()}
 						loading={showStreamingPanel || analyzing}
@@ -1775,10 +1851,11 @@
 						</svg>
 						Re-run Analysis
 					</AsyncButton>
+					{/if}
 					</div>
 				{/if}
 
-					{#if analysisStatus.status === 'error'}
+					{#if controls.startOver && analysisStatus.status === 'error'}
 					<div>
 						<AsyncButton
 							onclick={() => runAnalysis()}
@@ -1802,6 +1879,121 @@
 						</div>
 					{/if}
 					</div>
+					{:else}
+					<div class="card-standard">
+						<div class="flex justify-between items-center mb-6">
+							<h3 class="text-lg font-heading font-semibold text-contrast">Analysis</h3>
+							{#if documents.length > 0 && !showProgressModal}
+								<div class="flex items-center gap-2">
+									{#if analysisStatus?.status === 'processing'}
+										<AsyncButton
+											onclick={resumeProcessingAnalysis}
+											loading={false}
+											variant="primary"
+											title="Check if the server completed the analysis"
+										>
+											Resume
+										</AsyncButton>
+										<AsyncButton
+											onclick={cancelAnalysis}
+											loading={false}
+											variant="secondary"
+											title="Cancel the current analysis"
+										>
+											Cancel
+										</AsyncButton>
+									{/if}
+
+									<AsyncButton
+										onclick={() => runAnalysis()}
+										loading={analyzing || (analysisStatus && analysisStatus.status === 'processing')}
+										variant="primary"
+										loadingText="Analyzing..."
+									>
+										{#if analysisStatus && (analysisStatus.status === 'completed' || analysisStatus.status === 'failed')}
+											Run New Analysis
+										{:else}
+											Start Analysis
+										{/if}
+									</AsyncButton>
+								</div>
+							{/if}
+						</div>
+
+		{#if !analysisStatus && documents.length === 0}
+			<p class="text-sm text-gray-500">Upload documents to start analysis.</p>
+		{:else if !analysisStatus}
+			<p class="text-sm text-gray-500">Click "Start Analysis" button above to analyze your documents.</p>
+		{:else}
+			<div class="space-y-6">
+				<div>
+					<dt class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Status</dt>
+					<dd class="mt-2">
+						<span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full {getStatusColor(analysisStatus.status)}">
+							{analysisStatus.status}
+						</span>
+					</dd>
+				</div>
+
+				{#if analysisStatus.status === 'completed' && analysisStatus.result}
+					<div class="flex items-center space-x-3">
+						<AsyncButton
+							onclick={async () => {
+								navigatingToResults = true;
+								showingEmbeddedResults = true;
+								await loadEmbeddedResults(true);
+								persistAnalysisViewToUrl();
+								navigatingToResults = false;
+							}}
+							loading={navigatingToResults}
+							variant="primary"
+							loadingText="Loading Results..."
+						>
+						<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+						</svg>
+							Open Results Workspace
+						</AsyncButton>
+				<AsyncButton
+					onclick={() => runAnalysis()}
+					loading={showStreamingPanel || analyzing}
+					variant="secondary"
+					loadingText="Re-running..."
+					title="Re-run analysis with current documents"
+				>
+					<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+					</svg>
+					Re-run Analysis
+				</AsyncButton>
+				</div>
+			{/if}
+
+				{#if analysisStatus.status === 'error'}
+				<div>
+					<AsyncButton
+						onclick={() => runAnalysis()}
+						loading={showStreamingPanel || analyzing}
+						variant="primary"
+						loadingText="Retrying..."
+					>
+						<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+						</svg>
+						Retry Analysis
+					</AsyncButton>
+				</div>
+				{/if}
+
+						{#if analysisStatus.error}
+							<div class="rounded-md bg-red-50 p-4">
+								<p class="text-sm text-gray-800">{analysisStatus.error}</p>
+							</div>
+						{/if}
+					</div>
+				{/if}
+				</div>
+				{/if}
 					{/if}
 					{/if}
 

@@ -1354,6 +1354,8 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
             document: Optional[dict] = None,
             tokens_used: int = 0,
             chunk_status: Optional[dict] = None,
+            items_done: Optional[int] = None,
+            items_total: Optional[int] = None,
         ):
             """Publish progress updates to SSE stream and persistent storage."""
             nonlocal total_tokens_used
@@ -1383,6 +1385,10 @@ async def process_case_background(case_id: str, analysis_id: str, supabase, prov
                 "tokens_used": total_tokens_used,
                 "model": progress_model,
             }
+            if items_done is not None:
+                payload["stats"]["items_done"] = items_done
+            if items_total is not None:
+                payload["stats"]["items_total"] = items_total
 
             # Cooperative cancellation
             if _analysis_is_cancelled(supabase, analysis_id):

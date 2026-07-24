@@ -8,10 +8,47 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status as
 from sse_starlette.sse import EventSourceResponse
 
 from legal_portal.api.dependencies import get_supabase_client
+from legal_portal.core import run_state
 
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 logger = logging.getLogger(__name__)
+
+
+def _build_ui_fields(j: dict, progress: dict, heartbeat_age, elapsed_in_step: float) -> dict:
+    """Compute the Trustworthy-Wait UI fields. Pure w.r.t. its inputs; never raises."""
+    stage = j.get("stage")
+    doc_count = j.get("doc_count") or 0
+    ui_state = run_state.compute_ui_state(
+        job=j, has_result=False, heartbeat_age_seconds=heartbeat_age,
+    )
+    healthy = not (heartbeat_age is not None and heartbeat_age >= 180)
+    step_index = run_state.stage_to_step(stage)
+
+    stats = (progress or {}).get("stats") or {}
+    items_done = stats.get("items_done")
+    items_total = stats.get("items_total")
+
+    eta_seconds = None
+    if ui_state == "running":
+        eta_seconds = run_state.estimate_eta(
+            current_step=step_index, doc_count=doc_count,
+            elapsed_in_step_seconds=elapsed_in_step or 0,
+        )
+
+    cancel_reason = run_state.cancel_reason(j.get("error")) if ui_state == "cancelled" else None
+
+    return {
+        "ui_state": ui_state,
+        "step_index": step_index,
+        "step_total": run_state.STEP_TOTAL,
+        "step_label": run_state.step_label(stage),
+        "items_done": items_done,
+        "items_total": items_total,
+        "eta_seconds": eta_seconds,
+        "healthy": healthy,
+        "cancel_reason": cancel_reason,
+    }
 
 
 def _extract_token(request: Request, token: str | None = None) -> str:
@@ -346,7 +383,7 @@ async def get_job_status(
             supabase.table("analysis_jobs")
             .select(
                 "id, status, stage, progress, attempts, max_attempts, error, "
-                "heartbeat_at, created_at, started_at, completed_at, analysis_id, case_id"
+                "heartbeat_at, created_at, started_at, completed_at, analysis_id, case_id, doc_count"
             )
             .eq("id", job_id)
             .single()
@@ -405,6 +442,21 @@ async def get_job_status(
         except Exception:
             pass  # Non-critical — omit queue info on error
 
+    # elapsed within the current step: prefer progress.timestamp; fall back to started_at
+    elapsed_in_step = 0.0
+    ts = (progress or {}).get("timestamp") or j.get("started_at")
+    if ts:
+        try:
+            from dateutil.parser import parse as parse_dt
+            from datetime import timezone
+            t = parse_dt(ts)
+            now2 = datetime.utcnow().replace(tzinfo=timezone.utc) if t.tzinfo else datetime.utcnow()
+            elapsed_in_step = max(0.0, (now2 - t).total_seconds())
+        except Exception:
+            elapsed_in_step = 0.0
+
+    ui_fields = _build_ui_fields(j, progress, heartbeat_age, elapsed_in_step)
+
     return {
         "job_id": j["id"],
         "analysis_id": j["analysis_id"],
@@ -416,6 +468,7 @@ async def get_job_status(
         "max_attempts": j["max_attempts"],
         "error": j["error"],
         "heartbeat_age_seconds": heartbeat_age,
+        **ui_fields,
         "queue_position": queue_position,
         "worker_busy": worker_busy,
         "created_at": j["created_at"],

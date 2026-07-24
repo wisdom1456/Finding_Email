@@ -84,16 +84,66 @@ export interface EnhancedProgressState<T = unknown> extends ProgressState<T> {
 	failedDocs: FailedDocument[];
 	hasRecoveryPending: boolean;
 	chunkStatus: ChunkStatus | null;
+	// Trustworthy-Wait fields (carried from durable job status payload)
+	uiState?: string;
+	stepIndex?: number;
+	stepTotal?: number;
+	stepLabel?: string;
+	itemsDone?: number | null;
+	itemsTotal?: number | null;
+	etaSeconds?: number | null;
+	healthy?: boolean;
+	cancelReason?: string | null;
+	heartbeatAgeSeconds?: number | null;
 }
 
+/**
+ * Canonical 6 analysis stages, matching the backend's durable-job step order.
+ */
 const DEFAULT_STAGES: StageState[] = [
-	{ id: 'preparing', name: 'Preparing Documents', status: 'pending', progress: 0 },
-	{ id: 'doc_analysis', name: 'Analyzing Documents', status: 'pending', progress: 0 },
-	{ id: 'fact_extraction', name: 'Extracting Key Facts', status: 'pending', progress: 0 },
-	{ id: 'legal_mapping', name: 'Mapping Legal Issues', status: 'pending', progress: 0 },
-	{ id: 'deep_analysis', name: 'Running Deep Analysis', status: 'pending', progress: 0 },
-	{ id: 'finalizing', name: 'Finalizing Results', status: 'pending', progress: 0 },
+	{ id: 'preparing', name: 'Preparing documents', status: 'pending', progress: 0 },
+	{ id: 'analyzing', name: 'Analyzing documents', status: 'pending', progress: 0 },
+	{ id: 'fact_extraction', name: 'Extracting key facts', status: 'pending', progress: 0 },
+	{ id: 'issue_mapping', name: 'Mapping legal issues', status: 'pending', progress: 0 },
+	{ id: 'deep_analysis', name: 'Running deep analysis', status: 'pending', progress: 0 },
+	{ id: 'finalizing', name: 'Finalizing results', status: 'pending', progress: 0 },
 ];
+
+/**
+ * Trustworthy-Wait fields carried from the job-status payload (Tasks 3-5),
+ * mapped from backend snake_case to frontend camelCase.
+ */
+export interface UiRunFields {
+	uiState?: string;
+	stepIndex?: number;
+	stepTotal: number;
+	stepLabel?: string;
+	itemsDone?: number | null;
+	itemsTotal?: number | null;
+	etaSeconds?: number | null;
+	healthy?: boolean;
+	cancelReason?: string | null;
+	heartbeatAgeSeconds?: number | null;
+}
+
+/**
+ * Pure mapper: job-status payload (snake_case) -> UiRunFields (camelCase).
+ * Tolerates legacy payloads that lack the new fields entirely.
+ */
+export function mapJobStatusToUi(p: Record<string, any>): UiRunFields {
+	return {
+		uiState: p.ui_state,
+		stepIndex: p.step_index,
+		stepTotal: p.step_total ?? 6,
+		stepLabel: p.step_label,
+		itemsDone: p.items_done ?? null,
+		itemsTotal: p.items_total ?? null,
+		etaSeconds: p.eta_seconds ?? null,
+		healthy: p.healthy,
+		cancelReason: p.cancel_reason ?? null,
+		heartbeatAgeSeconds: p.heartbeat_age_seconds ?? null,
+	};
+}
 
 const initialState: EnhancedProgressState<unknown> = {
 	message: '',
@@ -549,10 +599,10 @@ function createProgressStore() {
 				const JOB_STAGE_MAP: Record<string, string> = {
 					'queued': 'preparing',
 					'preparing': 'preparing',
-					'summarization': 'doc_analysis',
-					'synthesis': 'doc_analysis',
+					'summarization': 'analyzing',
+					'synthesis': 'analyzing',
 					'fact_extraction': 'fact_extraction',
-					'issue_mapping': 'legal_mapping',
+					'issue_mapping': 'issue_mapping',
 					'deep_analysis': 'deep_analysis',
 					'gap_analysis': 'deep_analysis',
 					'finalizing': 'finalizing',
@@ -651,7 +701,9 @@ function createProgressStore() {
 							stats: event.stats ? { ...state.stats, ...event.stats } : state.stats,
 							chunkStatus: event.chunk_status || state.chunkStatus,
 							hasRecoveryPending: event.chunk_status?.type === 'chunk_complete_with_errors' || state.hasRecoveryPending,
-							failedDocs: (event.chunk_status?.failed_docs?.length > 0 ? event.chunk_status.failed_docs : state.failedDocs)
+							failedDocs: (event.chunk_status?.failed_docs?.length > 0 ? event.chunk_status.failed_docs : state.failedDocs),
+							// Trustworthy-Wait fields (additive; carried straight from the job payload)
+							...mapJobStatusToUi(event)
 						};
 					});
 				};

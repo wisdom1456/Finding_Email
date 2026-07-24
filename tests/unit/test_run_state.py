@@ -55,6 +55,9 @@ def test_every_check_allowed_stage_maps_or_is_terminal():
     ({"status": "failed", "stage": "deep_analysis"}, False, None, "failed"),
     # active beats a stale prior result: running job + old result present → running, not completed
     ({"status": "running", "stage": "preparing"}, True, 5, "running"),
+    # terminal job status must win over a stale has_result — never mask a failure/cancel as completed
+    ({"status": "failed", "stage": "deep_analysis"}, True, None, "failed"),
+    ({"status": "cancelled", "stage": "summarization"}, True, None, "cancelled"),
 ])
 def test_compute_ui_state(job, has_result, hb, expected):
     assert rs.compute_ui_state(job=job, has_result=has_result, heartbeat_age_seconds=hb) == expected

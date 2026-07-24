@@ -65,13 +65,15 @@ def compute_ui_state(
             if heartbeat_age_seconds is not None and heartbeat_age_seconds >= stall_threshold:
                 return "stalled"
             return "running"
-        if status == "completed" or has_result:
+        if status == "completed":
             return "completed"
         if status == "failed":
             return "failed"
         if status == "cancelled":
             return "cancelled"
-        return "completed" if has_result else "idle"
+        if has_result:
+            return "completed"
+        return "idle"
     except Exception:
         return "completed" if has_result else "idle"
 

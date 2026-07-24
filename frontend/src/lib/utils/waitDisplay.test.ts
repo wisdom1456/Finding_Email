@@ -14,6 +14,10 @@ describe('waitDisplay', () => {
 		expect(livenessLine(false, 200)).toContain('unresponsive');
 	});
 
+	it('liveness line reports the real heartbeat age', () => {
+		expect(livenessLine(true, 4)).toContain('updated 4s ago');
+	});
+
 	it('substance line uses item counts when present, degrades otherwise', () => {
 		expect(substanceLine(42, 71, 3)).toBe('42 of 71 documents');
 		expect(substanceLine(null, null, 5)).toBe('This step takes several minutes on large cases');

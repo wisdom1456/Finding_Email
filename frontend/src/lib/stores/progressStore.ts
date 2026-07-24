@@ -94,6 +94,7 @@ export interface EnhancedProgressState<T = unknown> extends ProgressState<T> {
 	etaSeconds?: number | null;
 	healthy?: boolean;
 	cancelReason?: string | null;
+	heartbeatAgeSeconds?: number | null;
 }
 
 /**
@@ -122,6 +123,7 @@ export interface UiRunFields {
 	etaSeconds?: number | null;
 	healthy?: boolean;
 	cancelReason?: string | null;
+	heartbeatAgeSeconds?: number | null;
 }
 
 /**
@@ -139,6 +141,7 @@ export function mapJobStatusToUi(p: Record<string, any>): UiRunFields {
 		etaSeconds: p.eta_seconds ?? null,
 		healthy: p.healthy,
 		cancelReason: p.cancel_reason ?? null,
+		heartbeatAgeSeconds: p.heartbeat_age_seconds ?? null,
 	};
 }
 

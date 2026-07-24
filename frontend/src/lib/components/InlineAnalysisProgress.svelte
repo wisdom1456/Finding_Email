@@ -183,7 +183,7 @@
 				{#if formatEta(state.etaSeconds)} · {formatEta(state.etaSeconds)}{/if}
 			</p>
 			<p class="tw-liveness text-xs text-gray-400">
-				{livenessLine(state.healthy, null)}
+				{livenessLine(state.healthy, state.heartbeatAgeSeconds)}
 			</p>
 		</div>
 	{/if}

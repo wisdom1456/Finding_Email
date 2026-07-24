@@ -2390,6 +2390,8 @@ Return ONLY valid JSON, no markdown code blocks.
                     ),
                     phase="document_analysis",
                     percent=15 + int((processed_count / total_docs) * 60),
+                    items_done=processed_count,
+                    items_total=total_docs,
                 )
 
             batch_start_time = time.time()
@@ -2516,6 +2518,8 @@ Return ONLY valid JSON, no markdown code blocks.
                         docs_processed=batch_doc_names,
                         phase="document_analysis",
                         percent=15 + int((processed_count / total_docs) * 60),
+                        items_done=processed_count,
+                        items_total=total_docs,
                     )
 
                 return batch_result or [], batch_errors or []
@@ -2542,6 +2546,8 @@ Return ONLY valid JSON, no markdown code blocks.
                         message=f"Timeout on batch {batch_num}",
                         phase="document_analysis",
                         percent=15 + int((processed_count / total_docs) * 60),
+                        items_done=processed_count,
+                        items_total=total_docs,
                     )
 
                 return [], [
@@ -2569,6 +2575,8 @@ Return ONLY valid JSON, no markdown code blocks.
                         message=f"Error in batch {batch_num}",
                         phase="document_analysis",
                         percent=15 + int((processed_count / total_docs) * 60),
+                        items_done=processed_count,
+                        items_total=total_docs,
                     )
 
                 return [], [

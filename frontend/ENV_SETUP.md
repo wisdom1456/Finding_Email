@@ -51,6 +51,13 @@ Configure these environment variables in the Vercel Dashboard:
   `items_*`, `eta_seconds`, `healthy`, `cancel_reason`) ship regardless of this
   flag; it only gates frontend rendering in `InlineAnalysisProgress.svelte`
   and `+page.svelte`. An unset flag evaluates as `false` at runtime.
+- `PUBLIC_ENABLE_PASSWORD_RESET` — **default off.** When `true`, shows the
+  "Forgot your password?" link on `/login` and enables the self-service reset
+  flow (`/forgot-password` → recovery email → `/auth/callback` →
+  `/account/update-password`). Additive and inert until enabled. **Only turn
+  this on once auth email delivery works** (Site URL correct + SMTP verified —
+  see the two sections below); otherwise users hit a reset that never emails.
+  An unset flag evaluates as `false` at runtime.
 
 ## Supabase Auth Site URL (hosted project) — required for email links
 
@@ -73,6 +80,29 @@ project dashboard (**Authentication → URL Configuration**), NOT via the
 > for **local** dev. Running `supabase config push` would overwrite the hosted
 > Site URL with that localhost value — so change the hosted Site URL in the
 > dashboard, and avoid `config push` unless `config.toml` is set to prod first.
+
+## Supabase Auth SMTP (hosted project) — required for email to deliver
+
+By default the hosted project uses Supabase's built-in mailer, which is
+rate-limited (~a few/hour) and "for testing only" — transactional emails
+silently fail to deliver. Configure custom SMTP under
+**Authentication → Emails → SMTP Settings**. Current working setup (Resend):
+
+| Setting | Value |
+|---|---|
+| Sender email | `noreply@login.brflorida.com` (must be on a **verified** Resend domain) |
+| Host | `smtp.resend.com` |
+| Port | `465` |
+| Username | `resend` (literal) |
+| Password | a Resend **API key** (`re_…`) from the account that owns the domain |
+
+> ⚠️ The **sender domain must be verified in Resend** or every send is rejected
+> with `550 "domain is not verified"` (and Supabase surfaces
+> `Error sending magic link email`). Verify `login.brflorida.com` in the Resend
+> account whose API key is in the Password field, by publishing its DKIM (TXT),
+> SPF (TXT), and return-path (MX) records — in **Route 53**, enter the record
+> **name as the prefix only** (`resend._domainkey.login`, `send.login`); Route 53
+> appends the zone, so pasting the full FQDN produces a broken doubled suffix.
 
 ## Important Notes
 

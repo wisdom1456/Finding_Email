@@ -1,8 +1,13 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase';
+	import { env } from '$env/dynamic/public';
 	import AsyncButton from '$lib/components/ui/AsyncButton.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import logoImg from '$lib/assets/logo-br.png';
+
+	// Trustworthy-wait-style rollout: the self-service reset entry point is
+	// gated so it only appears once the flow + Supabase email config are ready.
+	const passwordResetEnabled = env.PUBLIC_ENABLE_PASSWORD_RESET === 'true';
 
 	let email = $state('');
 	let password = $state('');
@@ -89,6 +94,14 @@
 					Sign in
 				</AsyncButton>
 			</div>
+
+				{#if passwordResetEnabled}
+					<div class="text-center pt-1">
+						<a href="/forgot-password" class="text-sm font-medium text-accent hover:text-accent-hover transition-colors">
+							Forgot your password?
+						</a>
+					</div>
+				{/if}
 
 				<div class="text-center pt-2">
 					<a href="/register" class="text-sm font-medium text-accent hover:text-accent-hover transition-colors">
